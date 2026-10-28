@@ -43,6 +43,25 @@ function __bncmInstallChannelShim() {
     }
   }
 
+  // Native injects ncmChannelOSX after this script runs but before NCM's earliest registerCall
+  // (audioplayer.onPlayState among them), so wrapping it at DOMContentLoaded misses those. Trap
+  // the assignment to wrap it at once; if native defines the property some other way the trap is
+  // simply replaced and the DOMContentLoaded wrap below still runs.
+  function trapChannelObject() {
+    if (window.ncmChannelOSX || Object.getOwnPropertyDescriptor(window, 'ncmChannelOSX')) return;
+    try {
+      Object.defineProperty(window, 'ncmChannelOSX', {
+        configurable: true,
+        enumerable: true,
+        get() { return undefined; },
+        set(v) {
+          Object.defineProperty(window, 'ncmChannelOSX', { value: v, writable: true, configurable: true, enumerable: true });
+          wrapPostMessage();
+        },
+      });
+    } catch { /* leave it to the DOMContentLoaded wrap */ }
+  }
+
   function post(msg) {
     if (!wrapped) noteRegister(msg);
     window.ncmChannelOSX.postMessage(msg);
@@ -95,10 +114,19 @@ function __bncmInstallChannelShim() {
     }
   }
 
+  // macOS sends onPlayState as [id, "id|pause|RANDOM", 2]; plugins written for Windows take the
+  // last "|" segment as the state (RefinedNowPlaying: .split("|").pop()), so drop the suffix.
+  const PLAY_STATE = 'audioplayer.onPlayState';
+  const PLAY_STATE_ARG = /^([^|]*\|(?:pause|resume|play|stop))\|[^|]*$/;
+
   function dispatch(command, args) {
     if (command === PROGRESS) {
       dispatchProgress(args);
       return;
+    }
+    if (command === PLAY_STATE && typeof args[1] === 'string') {
+      args = args.slice();
+      args[1] = args[1].replace(PLAY_STATE_ARG, '$1');
     }
     deliver(command, args);
   }
@@ -126,11 +154,43 @@ function __bncmInstallChannelShim() {
     const d = Object.getOwnPropertyDescriptor(window, 'MNBCallback');
     if (!d || !d.set) return false;
     window.MNBCallback = (s, args) => {
+      if (!commandOf[s] && !latestSeq[PLAY_STATE] && looksLikePlayState(s, args)) {
+        // Registered before the wrap could see it (see trapChannelObject); its events are unique.
+        commandOf[s] = PLAY_STATE;
+        latestSeq[PLAY_STATE] = s;
+      }
       const command = commandOf[s];
       if (!command || String(s).startsWith(SEQ_PREFIX) || latestSeq[command] !== s) return;
       dispatch(command, Array.isArray(args) ? args : []);
     };
     return true;
+  }
+
+  function looksLikePlayState(s, args) {
+    const entry = callbackMap()?.[s];
+    return !!entry && entry.type === 'registerCall' && Array.isArray(args) && args.length === 3
+      && typeof args[1] === 'string' && PLAY_STATE_ARG.test(args[1]) && args[1].startsWith(String(args[0]) + '|');
+  }
+
+  // No onPlayState fires after a page load until playback is toggled, and RefinedNowPlaying's
+  // fallback (class names on NCM's play button) does not match the macOS client, so a plugin that
+  // registers late shows "paused" while music plays. Give such a listener one state event, read
+  // from whether the progress position advances (NCM's store is stale right after a reload).
+  function replayPlayStateTo(cb) {
+    const before = progressSeen;
+    setTimeout(() => {
+      if (lastArgs[PLAY_STATE]) return; // a real event came
+      const now = progressSeen;
+      const id = (now && now.id) || currentTrackId();
+      if (!id) return;
+      const playing = !!now && performance.now() - now.at < 1000 && (!before || now.pos > before.pos);
+      console.debug('[BetterNCM] channel shim: replaying audioplayer.onPlayState', playing ? 'resume' : 'pause');
+      try {
+        cb.call(window, id, id + '|' + (playing ? 'resume' : 'pause'), playing ? 1 : 2);
+      } catch (e) {
+        console.error('[BetterNCM] replayed audioplayer.onPlayState failed', e);
+      }
+    }, 1500);
   }
 
   // On Windows, native fires audioplayer.onLoad for the restored track after plugins have
@@ -180,6 +240,7 @@ function __bncmInstallChannelShim() {
       const list = listeners[evt] || (listeners[evt] = []);
       if (!list.includes(cb)) list.push(cb);
       if (evt === 'audioplayer.onLoad' && !lastArgs[evt]) replayLoadTo(cb);
+      if (evt === PLAY_STATE && !lastArgs[evt]) replayPlayStateTo(cb);
       if (latestSeq[evt]) return; // already registered natively (by NCM or by us)
       const s = nextSeq();
       const map = callbackMap();
@@ -204,6 +265,7 @@ function __bncmInstallChannelShim() {
 
   // Wrap as early as possible so NCM's own boot-time registrations are recorded.
   wrapPostMessage();
+  trapChannelObject();
 
   // NCM's parser-blocking bundles have run by DOMContentLoaded, so their feature detection does
   // not see window.channel; this capture listener still runs before the framework's own.
