@@ -9,6 +9,9 @@
 // right side, ~51% at 1920px), close to Apple Music's ~36%, so lines wrap earlier and the page
 // reads tighter. RNPN re-lays out the lyrics from a ResizeObserver on that container.
 //
+// The cover follows Apple Music's proportion, ~28% of the window width, capped at half the window
+// height so the cover plus controls still fit in a wide fullscreen window (RNPN uses 24vw).
+//
 // The volume control stays where RNPN rendered it in the DOM (moving nodes RNPN owns would
 // fight its rendering); it is positioned against .mn, the column holding both the song info and
 // the controls, at the offsets measured from the more button.
@@ -22,6 +25,7 @@ const MN = '#rnp-view .g-single-track .g-singlec-ct .n-single .mn';
 const LYRIC_COLUMN_VW = 38;
 
 const CSS = `
+#rnp-view { --rnp-v3-cover-width: clamp(240px, min(28vw, 50vh), 640px) !important; }
 /* + 60px: .rnp-lyrics's own horizontal padding */
 #rnp-view .rnp-lyrics { max-width: calc(${LYRIC_COLUMN_VW}vw + 60px); }
 ${MN} { position: relative; }
@@ -106,6 +110,8 @@ function attach() {
 
 function start() {
   install();
+  // RNPN measures the cover column on resize to center it; have it re-measure with our width.
+  window.dispatchEvent(new Event('resize'));
   attach();
   // RNPN builds its view after plugins load and re-renders it per track; re-check cheaply.
   setInterval(attach, 2000);
