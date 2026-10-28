@@ -12,6 +12,10 @@
 // The cover follows Apple Music's proportion, ~28% of the window width, capped at half the window
 // height so the cover plus controls still fit in a wide fullscreen window (RNPN uses 24vw).
 //
+// The cover and controls block, centered in the full window height, reads high: the top ~30px
+// hold the window's traffic lights, so it is nudged down by BLOCK_SHIFT_VH to center it in the
+// area below them.
+//
 // The volume control stays where RNPN rendered it in the DOM (moving nodes RNPN owns would
 // fight its rendering); it is positioned against .mn, the column holding both the song info and
 // the controls, at the offsets measured from the more button.
@@ -23,9 +27,11 @@ const GAP = 8;
 const OPEN_WIDTH = 170;
 const MN = '#rnp-view .g-single-track .g-singlec-ct .n-single .mn';
 const LYRIC_COLUMN_VW = 38;
+const BLOCK_SHIFT_VH = 3;
 
 const CSS = `
 #rnp-view { --rnp-v3-cover-width: clamp(240px, min(28vw, 50vh), 640px) !important; }
+#rnp-view .g-single-track .g-singlec-ct .n-single .rnp-v3-side { transform: translateY(${BLOCK_SHIFT_VH}vh); }
 /* + 60px: .rnp-lyrics's own horizontal padding */
 #rnp-view .rnp-lyrics { max-width: calc(${LYRIC_COLUMN_VW}vw + 60px); }
 ${MN} { position: relative; }
