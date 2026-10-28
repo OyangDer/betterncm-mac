@@ -27,6 +27,18 @@ const rnpLoaded = () => !!window.loadedPlugins?.RefinedNowPlayingNext;
 const isShown = (el) => getComputedStyle(el).display !== 'none';
 const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 
+// Opacity as well as visibility: the record's cover image sets `visibility: visible` on itself,
+// which overrides a hidden parent, and showed as a record flying in.
+function hide(el) {
+  el.style.setProperty('visibility', 'hidden', 'important');
+  el.style.setProperty('opacity', '0', 'important');
+}
+
+function unhide(el) {
+  el.style.removeProperty('visibility');
+  el.style.removeProperty('opacity');
+}
+
 function openRnp() {
   // RNPN keys on the target's closest .miniVinylWrapper; the play bar's cover is one, but it is
   // not rendered in every mode, so a temporary stand-in is used when it is missing.
@@ -53,9 +65,11 @@ function onStyleChange() {
     stuck = false;
     return;
   }
-  if (stuck || shiftOpen || !rnpLoaded()) return;
+  // A hidden window paints nothing, and NCM's collapse button does nothing while its animations
+  // are paused there; this runs again when the window shows.
+  if (stuck || shiftOpen || document.hidden || !rnpLoaded()) return;
   replacing = true;
-  el.style.setProperty('visibility', 'hidden', 'important');
+  hide(el);
   try {
     if (!document.body.classList.contains(PAGE_OPEN)) openRnp();
   } catch (e) {
@@ -73,7 +87,7 @@ function onStyleChange() {
     }
     stuck = isShown(el);
     if (stuck) console.warn('[BetterNCM] the stock now-playing page did not close');
-    el.style.removeProperty('visibility');
+    unhide(el);
     replacing = false;
   };
   setTimeout(collapse, 0);
@@ -97,6 +111,12 @@ const noteShift = (e) => {
   }
 };
 for (const type of ['pointerdown', 'mousedown', 'click']) document.addEventListener(type, noteShift, true);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  stuck = false;
+  onStyleChange();
+});
 
 // The timer also covers a page that was already open when RNPN finished loading (NCM reopens
 // it after a reload while roaming), which no style change would report.

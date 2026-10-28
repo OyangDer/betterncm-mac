@@ -14,6 +14,7 @@ function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0 } = {}) {
   const log = [];
   const timers = [];
   let observerCb = null;
+  let onVisible = null;
   const bodyClasses = new Set(rnpOpen ? ['rnp-lyric-page-open'] : []);
   const styleProps = {};
   let collapseClicks = 0;
@@ -39,8 +40,9 @@ function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0 } = {}) {
     setInterval: () => {},
     console: { warn: () => log.push('warn') },
     document: {
+      hidden: false,
       querySelector: (sel) => (sel === '#vinyl-page-container' ? container : sel === 'footer .miniVinylWrapper' ? cover : null),
-      addEventListener: () => {},
+      addEventListener: (t, fn) => { if (t === 'visibilitychange') onVisible = fn; },
       body: { classList: { contains: (c) => bodyClasses.has(c) }, appendChild: () => {} },
     },
   };
@@ -48,17 +50,20 @@ function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0 } = {}) {
   vm.runInContext(CODE, vm.createContext(ctx));
   const open = () => { page.display = 'block'; observerCb?.(); };
   const flush = () => { for (let i = 0; i < 50 && timers.length; i++) timers.shift()(); };
-  return { log, open, flush, styleProps, page };
+  const setHidden = (h) => { ctx.document.hidden = h; if (!h) onVisible?.(); };
+  return { log, open, flush, styleProps, page, setHidden };
 }
 
 test('the stock page opening is replaced by RNPN and collapsed', () => {
   const p = load();
   p.open();
   assert.equal(p.styleProps.visibility, 'hidden', 'hidden before paint');
+  assert.equal(p.styleProps.opacity, '0', 'cover image overrides visibility, so opacity too');
   p.flush();
   assert.deepEqual(p.log, ['open-rnp', 'collapse']);
   assert.equal(p.page.display, 'none');
   assert.equal(p.styleProps.visibility, undefined, 'unhidden for next time');
+  assert.equal(p.styleProps.opacity, undefined);
 });
 
 test('collapse is retried while NCM is still opening the page', () => {
@@ -91,4 +96,27 @@ test('a page that will not close is shown again, not left invisible', () => {
   assert.equal(p.page.display, 'block');
   assert.equal(p.styleProps.visibility, undefined);
   assert.ok(p.log.includes('warn'));
+});
+
+test('a hidden window is left until it shows, then handled', () => {
+  const p = load();
+  p.setHidden(true);
+  p.open();
+  p.flush();
+  assert.deepEqual(p.log, []);
+  p.setHidden(false);
+  p.flush();
+  assert.deepEqual(p.log, ['open-rnp', 'collapse']);
+  assert.equal(p.page.display, 'none');
+});
+
+test('a page given up on is retried when the window shows again', () => {
+  const p = load({ collapseWorksAfter: 12 });
+  p.open();
+  p.flush();
+  assert.equal(p.page.display, 'block', 'gave up after the retries');
+  p.setHidden(true);
+  p.setHidden(false);
+  p.flush();
+  assert.equal(p.page.display, 'none');
 });
