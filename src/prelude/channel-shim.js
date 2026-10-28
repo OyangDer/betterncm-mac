@@ -50,7 +50,60 @@ function __bncmInstallChannelShim() {
 
   const lastArgs = Object.create(null); // command -> args of the newest event seen
 
+  // macOS native fires audioplayer.onPlayProgress ~50 times a second, far more often than the
+  // Windows client the plugins were written for, and RefinedNowPlaying rescans the page on each
+  // one. Plugins get at most one event per PROGRESS_INTERVAL_MS (the newest, delivered on a
+  // trailing timer); a track change or a seek-like jump goes through at once. NCM's own
+  // listeners are not affected.
+  const PROGRESS = 'audioplayer.onPlayProgress';
+  const PROGRESS_INTERVAL_MS = 100;
+  let progressSentAt = -Infinity;
+  let progressPending = null;
+  let progressTimer = 0;
+  let progressSeen = null; // { id, pos, at } of the newest event received
+
+  function isProgressJump(args, now) {
+    const id = String(args[0]);
+    const pos = parseFloat(args[1]);
+    const prev = progressSeen;
+    progressSeen = { id, pos, at: now };
+    if (!prev || prev.id !== id || !Number.isFinite(pos) || !Number.isFinite(prev.pos)) return true;
+    // Paused playback repeats the same position; playing advances by about the elapsed time.
+    return pos < prev.pos - 0.25 || pos > prev.pos + (now - prev.at) / 1000 + 0.75;
+  }
+
+  function dispatchProgress(args) {
+    const now = performance.now();
+    if (isProgressJump(args, now) || now - progressSentAt >= PROGRESS_INTERVAL_MS) {
+      clearTimeout(progressTimer);
+      progressTimer = 0;
+      progressPending = null;
+      progressSentAt = now;
+      deliver(PROGRESS, args);
+      return;
+    }
+    progressPending = args;
+    if (!progressTimer) {
+      progressTimer = setTimeout(() => {
+        progressTimer = 0;
+        if (!progressPending) return;
+        const pending = progressPending;
+        progressPending = null;
+        progressSentAt = performance.now();
+        deliver(PROGRESS, pending);
+      }, Math.max(0, PROGRESS_INTERVAL_MS - (now - progressSentAt)));
+    }
+  }
+
   function dispatch(command, args) {
+    if (command === PROGRESS) {
+      dispatchProgress(args);
+      return;
+    }
+    deliver(command, args);
+  }
+
+  function deliver(command, args) {
     lastArgs[command] = args;
     for (const cb of (listeners[command] || []).slice()) {
       try {
