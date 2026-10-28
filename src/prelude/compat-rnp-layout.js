@@ -5,6 +5,10 @@
 // the left into a pill holding the slider, with the speaker staying put at the right end. Taking
 // the row out of the flow also lets the bottom-aligned cover and controls block sit lower.
 //
+// The lyric column is capped at LYRIC_COLUMN_VW of the window width (RNPN lets it fill the whole
+// right side, ~51% at 1920px), close to Apple Music's ~36%, so lines wrap earlier and the page
+// reads tighter. RNPN re-lays out the lyrics from a ResizeObserver on that container.
+//
 // The volume control stays where RNPN rendered it in the DOM (moving nodes RNPN owns would
 // fight its rendering); it is positioned against .mn, the column holding both the song info and
 // the controls, at the offsets measured from the more button.
@@ -15,8 +19,11 @@ const SIZE = 30; // matches .rnp-info-more-button
 const GAP = 8;
 const OPEN_WIDTH = 170;
 const MN = '#rnp-view .g-single-track .g-singlec-ct .n-single .mn';
+const LYRIC_COLUMN_VW = 38;
 
 const CSS = `
+/* + 60px: .rnp-lyrics's own horizontal padding */
+#rnp-view .rnp-lyrics { max-width: calc(${LYRIC_COLUMN_VW}vw + 60px); }
 ${MN} { position: relative; }
 #rnp-view .am-music-volume-controls {
   position: absolute;
