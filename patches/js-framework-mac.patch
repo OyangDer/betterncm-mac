@@ -1,0 +1,1270 @@
+diff -ruN -x node_modules -x .git a/.gitignore b/.gitignore
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1 @@
+ node_modules
+-package-lock.json
+\ No newline at end of file
+diff -ruN -x node_modules -x .git a/package-lock.json b/package-lock.json
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -0,0 +1,656 @@
++{
++  "name": "betterncm-ts-framework",
++  "version": "1.0.0",
++  "lockfileVersion": 3,
++  "requires": true,
++  "packages": {
++    "": {
++      "name": "betterncm-ts-framework",
++      "version": "1.0.0",
++      "license": "GPL-3.0",
++      "dependencies": {
++        "rome": "^11.0.0",
++        "semver": "^7.5.4"
++      },
++      "devDependencies": {
++        "@types/react": "^18.0.26",
++        "@types/react-dom": "^18.0.9",
++        "@types/semver": "^7.5.6",
++        "esbuild": "^0.16.4",
++        "react": "^18.2.0",
++        "react-dom": "^18.2.0",
++        "typescript": "^4.9.4"
++      }
++    },
++    "node_modules/@esbuild/android-arm": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/android-arm/-/android-arm-0.16.17.tgz",
++      "integrity": "sha512-N9x1CMXVhtWEAMS7pNNONyA14f71VPQN9Cnavj1XQh6T7bskqiLLrSca4O0Vr8Wdcga943eThxnVp3JLnBMYtw==",
++      "cpu": [
++        "arm"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "android"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/android-arm64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/android-arm64/-/android-arm64-0.16.17.tgz",
++      "integrity": "sha512-MIGl6p5sc3RDTLLkYL1MyL8BMRN4tLMRCn+yRJJmEDvYZ2M7tmAf80hx1kbNEUX2KJ50RRtxZ4JHLvCfuB6kBg==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "android"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/android-x64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/android-x64/-/android-x64-0.16.17.tgz",
++      "integrity": "sha512-a3kTv3m0Ghh4z1DaFEuEDfz3OLONKuFvI4Xqczqx4BqLyuFaFkuaG4j2MtA6fuWEFeC5x9IvqnX7drmRq/fyAQ==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "android"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/darwin-arm64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.16.17.tgz",
++      "integrity": "sha512-/2agbUEfmxWHi9ARTX6OQ/KgXnOWfsNlTeLcoV7HSuSTv63E4DqtAc+2XqGw1KHxKMHGZgbVCZge7HXWX9Vn+w==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/darwin-x64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/darwin-x64/-/darwin-x64-0.16.17.tgz",
++      "integrity": "sha512-2By45OBHulkd9Svy5IOCZt376Aa2oOkiE9QWUK9fe6Tb+WDr8hXL3dpqi+DeLiMed8tVXspzsTAvd0jUl96wmg==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/freebsd-arm64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/freebsd-arm64/-/freebsd-arm64-0.16.17.tgz",
++      "integrity": "sha512-mt+cxZe1tVx489VTb4mBAOo2aKSnJ33L9fr25JXpqQqzbUIw/yzIzi+NHwAXK2qYV1lEFp4OoVeThGjUbmWmdw==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "freebsd"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/freebsd-x64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/freebsd-x64/-/freebsd-x64-0.16.17.tgz",
++      "integrity": "sha512-8ScTdNJl5idAKjH8zGAsN7RuWcyHG3BAvMNpKOBaqqR7EbUhhVHOqXRdL7oZvz8WNHL2pr5+eIT5c65kA6NHug==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "freebsd"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-arm": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-arm/-/linux-arm-0.16.17.tgz",
++      "integrity": "sha512-iihzrWbD4gIT7j3caMzKb/RsFFHCwqqbrbH9SqUSRrdXkXaygSZCZg1FybsZz57Ju7N/SHEgPyaR0LZ8Zbe9gQ==",
++      "cpu": [
++        "arm"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-arm64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.16.17.tgz",
++      "integrity": "sha512-7S8gJnSlqKGVJunnMCrXHU9Q8Q/tQIxk/xL8BqAP64wchPCTzuM6W3Ra8cIa1HIflAvDnNOt2jaL17vaW+1V0g==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-ia32": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-ia32/-/linux-ia32-0.16.17.tgz",
++      "integrity": "sha512-kiX69+wcPAdgl3Lonh1VI7MBr16nktEvOfViszBSxygRQqSpzv7BffMKRPMFwzeJGPxcio0pdD3kYQGpqQ2SSg==",
++      "cpu": [
++        "ia32"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-loong64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-loong64/-/linux-loong64-0.16.17.tgz",
++      "integrity": "sha512-dTzNnQwembNDhd654cA4QhbS9uDdXC3TKqMJjgOWsC0yNCbpzfWoXdZvp0mY7HU6nzk5E0zpRGGx3qoQg8T2DQ==",
++      "cpu": [
++        "loong64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-mips64el": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-mips64el/-/linux-mips64el-0.16.17.tgz",
++      "integrity": "sha512-ezbDkp2nDl0PfIUn0CsQ30kxfcLTlcx4Foz2kYv8qdC6ia2oX5Q3E/8m6lq84Dj/6b0FrkgD582fJMIfHhJfSw==",
++      "cpu": [
++        "mips64el"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-ppc64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-ppc64/-/linux-ppc64-0.16.17.tgz",
++      "integrity": "sha512-dzS678gYD1lJsW73zrFhDApLVdM3cUF2MvAa1D8K8KtcSKdLBPP4zZSLy6LFZ0jYqQdQ29bjAHJDgz0rVbLB3g==",
++      "cpu": [
++        "ppc64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-riscv64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-riscv64/-/linux-riscv64-0.16.17.tgz",
++      "integrity": "sha512-ylNlVsxuFjZK8DQtNUwiMskh6nT0vI7kYl/4fZgV1llP5d6+HIeL/vmmm3jpuoo8+NuXjQVZxmKuhDApK0/cKw==",
++      "cpu": [
++        "riscv64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-s390x": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-s390x/-/linux-s390x-0.16.17.tgz",
++      "integrity": "sha512-gzy7nUTO4UA4oZ2wAMXPNBGTzZFP7mss3aKR2hH+/4UUkCOyqmjXiKpzGrY2TlEUhbbejzXVKKGazYcQTZWA/w==",
++      "cpu": [
++        "s390x"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/linux-x64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.16.17.tgz",
++      "integrity": "sha512-mdPjPxfnmoqhgpiEArqi4egmBAMYvaObgn4poorpUaqmvzzbvqbowRllQ+ZgzGVMGKaPkqUmPDOOFQRUFDmeUw==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/netbsd-x64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/netbsd-x64/-/netbsd-x64-0.16.17.tgz",
++      "integrity": "sha512-/PzmzD/zyAeTUsduZa32bn0ORug+Jd1EGGAUJvqfeixoEISYpGnAezN6lnJoskauoai0Jrs+XSyvDhppCPoKOA==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "netbsd"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/openbsd-x64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/openbsd-x64/-/openbsd-x64-0.16.17.tgz",
++      "integrity": "sha512-2yaWJhvxGEz2RiftSk0UObqJa/b+rIAjnODJgv2GbGGpRwAfpgzyrg1WLK8rqA24mfZa9GvpjLcBBg8JHkoodg==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "openbsd"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/sunos-x64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/sunos-x64/-/sunos-x64-0.16.17.tgz",
++      "integrity": "sha512-xtVUiev38tN0R3g8VhRfN7Zl42YCJvyBhRKw1RJjwE1d2emWTVToPLNEQj/5Qxc6lVFATDiy6LjVHYhIPrLxzw==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "sunos"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/win32-arm64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/win32-arm64/-/win32-arm64-0.16.17.tgz",
++      "integrity": "sha512-ga8+JqBDHY4b6fQAmOgtJJue36scANy4l/rL97W+0wYmijhxKetzZdKOJI7olaBaMhWt8Pac2McJdZLxXWUEQw==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/win32-ia32": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/win32-ia32/-/win32-ia32-0.16.17.tgz",
++      "integrity": "sha512-WnsKaf46uSSF/sZhwnqE4L/F89AYNMiD4YtEcYekBt9Q7nj0DiId2XH2Ng2PHM54qi5oPrQ8luuzGszqi/veig==",
++      "cpu": [
++        "ia32"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@esbuild/win32-x64": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.16.17.tgz",
++      "integrity": "sha512-y+EHuSchhL7FjHgvQL/0fnnFmO4T1bhvWANX6gcnqTjtnKWbTvUMCpGnv2+t+31d7RzyEAYAd4u2fnIhHL6N/Q==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ],
++      "engines": {
++        "node": ">=12"
++      }
++    },
++    "node_modules/@rometools/cli-darwin-arm64": {
++      "version": "11.0.0",
++      "resolved": "https://registry.npmjs.org/@rometools/cli-darwin-arm64/-/cli-darwin-arm64-11.0.0.tgz",
++      "integrity": "sha512-F3vkdY+s3FLIEnAjSbyHTuIPB88cLpccimW4ecid5I7S6GzGG3iUJI4xT00JhH73K4P/qW20/9r+kH1T9Du8Xg==",
++      "cpu": [
++        "arm64"
++      ],
++      "optional": true,
++      "os": [
++        "darwin"
++      ]
++    },
++    "node_modules/@rometools/cli-darwin-x64": {
++      "version": "11.0.0",
++      "resolved": "https://registry.npmjs.org/@rometools/cli-darwin-x64/-/cli-darwin-x64-11.0.0.tgz",
++      "integrity": "sha512-X6jhtS6Iml4GOzgNtnLwIp/KXXhSdqeVyfv69m/AHnIzx3gQAjPZ7BPnJLvTCbhe4SKHL+uTZYFSCJpkUUKE6w==",
++      "cpu": [
++        "x64"
++      ],
++      "optional": true,
++      "os": [
++        "darwin"
++      ]
++    },
++    "node_modules/@rometools/cli-linux-arm64": {
++      "version": "11.0.0",
++      "resolved": "https://registry.npmjs.org/@rometools/cli-linux-arm64/-/cli-linux-arm64-11.0.0.tgz",
++      "integrity": "sha512-dktTJJlTpmycBZ2TwhJBcAO8ztK8DdevdyZnFFxdYRvtmJgTjIsC2UFayf/SbKew8B8q1IhI0it+D6ihAeIpeg==",
++      "cpu": [
++        "arm64"
++      ],
++      "optional": true,
++      "os": [
++        "linux"
++      ]
++    },
++    "node_modules/@rometools/cli-linux-x64": {
++      "version": "11.0.0",
++      "resolved": "https://registry.npmjs.org/@rometools/cli-linux-x64/-/cli-linux-x64-11.0.0.tgz",
++      "integrity": "sha512-WVcnXPNdWGUWo0p4NU8YzuthjYR7q+b4vRcjdxtP1DlpphZmSsoC/RSE85nEqRAz8hChcKUansVzOPM8BSsuGA==",
++      "cpu": [
++        "x64"
++      ],
++      "optional": true,
++      "os": [
++        "linux"
++      ]
++    },
++    "node_modules/@rometools/cli-win32-arm64": {
++      "version": "11.0.0",
++      "resolved": "https://registry.npmjs.org/@rometools/cli-win32-arm64/-/cli-win32-arm64-11.0.0.tgz",
++      "integrity": "sha512-tPj6RThQzS7Q45jqQll7NlTYvNcsg/BEP3LYiiazqSh9FAFnMkrV6ewUcMPKWyAfiyLs7jlz4rRvdNRUSygzfQ==",
++      "cpu": [
++        "arm64"
++      ],
++      "optional": true,
++      "os": [
++        "win32"
++      ]
++    },
++    "node_modules/@rometools/cli-win32-x64": {
++      "version": "11.0.0",
++      "resolved": "https://registry.npmjs.org/@rometools/cli-win32-x64/-/cli-win32-x64-11.0.0.tgz",
++      "integrity": "sha512-bmBai8WHxYjsGk1+je7ZTfCUCWq30WJI3pQM8pzTA674lfGTZ9ymJoZwTaIMSO4rL5V9mlO6uLunsBKso9VqOg==",
++      "cpu": [
++        "x64"
++      ],
++      "optional": true,
++      "os": [
++        "win32"
++      ]
++    },
++    "node_modules/@types/prop-types": {
++      "version": "15.7.15",
++      "resolved": "https://registry.npmjs.org/@types/prop-types/-/prop-types-15.7.15.tgz",
++      "integrity": "sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/@types/react": {
++      "version": "18.3.31",
++      "resolved": "https://registry.npmjs.org/@types/react/-/react-18.3.31.tgz",
++      "integrity": "sha512-vfEqpXTvwT91yhmwdfouStN2hSKwTvyRs8qpLfADyrq/kxDw0hZM7Wk9Ug1FELj8hIby+S/+kQCSRFF32nv2Qw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/prop-types": "*",
++        "csstype": "^3.2.2"
++      }
++    },
++    "node_modules/@types/react-dom": {
++      "version": "18.3.7",
++      "resolved": "https://registry.npmjs.org/@types/react-dom/-/react-dom-18.3.7.tgz",
++      "integrity": "sha512-MEe3UeoENYVFXzoXEWsvcpg6ZvlrFNlOQ7EOsvhI3CfAXwzPfO8Qwuxd40nepsYKqyyVQnTdEfv68q91yLcKrQ==",
++      "dev": true,
++      "license": "MIT",
++      "peerDependencies": {
++        "@types/react": "^18.0.0"
++      }
++    },
++    "node_modules/@types/semver": {
++      "version": "7.8.0",
++      "resolved": "https://registry.npmjs.org/@types/semver/-/semver-7.8.0.tgz",
++      "integrity": "sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/csstype": {
++      "version": "3.2.3",
++      "resolved": "https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz",
++      "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/esbuild": {
++      "version": "0.16.17",
++      "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.16.17.tgz",
++      "integrity": "sha512-G8LEkV0XzDMNwXKgM0Jwu3nY3lSTwSGY6XbxM9cr9+s0T/qSV1q1JVPBGzm3dcjhCic9+emZDmMffkwgPeOeLg==",
++      "dev": true,
++      "hasInstallScript": true,
++      "license": "MIT",
++      "bin": {
++        "esbuild": "bin/esbuild"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "optionalDependencies": {
++        "@esbuild/android-arm": "0.16.17",
++        "@esbuild/android-arm64": "0.16.17",
++        "@esbuild/android-x64": "0.16.17",
++        "@esbuild/darwin-arm64": "0.16.17",
++        "@esbuild/darwin-x64": "0.16.17",
++        "@esbuild/freebsd-arm64": "0.16.17",
++        "@esbuild/freebsd-x64": "0.16.17",
++        "@esbuild/linux-arm": "0.16.17",
++        "@esbuild/linux-arm64": "0.16.17",
++        "@esbuild/linux-ia32": "0.16.17",
++        "@esbuild/linux-loong64": "0.16.17",
++        "@esbuild/linux-mips64el": "0.16.17",
++        "@esbuild/linux-ppc64": "0.16.17",
++        "@esbuild/linux-riscv64": "0.16.17",
++        "@esbuild/linux-s390x": "0.16.17",
++        "@esbuild/linux-x64": "0.16.17",
++        "@esbuild/netbsd-x64": "0.16.17",
++        "@esbuild/openbsd-x64": "0.16.17",
++        "@esbuild/sunos-x64": "0.16.17",
++        "@esbuild/win32-arm64": "0.16.17",
++        "@esbuild/win32-ia32": "0.16.17",
++        "@esbuild/win32-x64": "0.16.17"
++      }
++    },
++    "node_modules/js-tokens": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
++      "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/loose-envify": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz",
++      "integrity": "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "js-tokens": "^3.0.0 || ^4.0.0"
++      },
++      "bin": {
++        "loose-envify": "cli.js"
++      }
++    },
++    "node_modules/react": {
++      "version": "18.3.1",
++      "resolved": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
++      "integrity": "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "loose-envify": "^1.1.0"
++      },
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/react-dom": {
++      "version": "18.3.1",
++      "resolved": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
++      "integrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "loose-envify": "^1.1.0",
++        "scheduler": "^0.23.2"
++      },
++      "peerDependencies": {
++        "react": "^18.3.1"
++      }
++    },
++    "node_modules/rome": {
++      "version": "11.0.0",
++      "resolved": "https://registry.npmjs.org/rome/-/rome-11.0.0.tgz",
++      "integrity": "sha512-rRo6JOwpMLc3OkeTDRXkrmrDqnxDvZ75GS4f0jLDBNmRgDXWbu0F8eVnJoRn+VbK2AE7vWvhVOMBjnWowcopkQ==",
++      "hasInstallScript": true,
++      "license": "MIT",
++      "bin": {
++        "rome": "bin/rome"
++      },
++      "engines": {
++        "node": ">=14.*"
++      },
++      "optionalDependencies": {
++        "@rometools/cli-darwin-arm64": "11.0.0",
++        "@rometools/cli-darwin-x64": "11.0.0",
++        "@rometools/cli-linux-arm64": "11.0.0",
++        "@rometools/cli-linux-x64": "11.0.0",
++        "@rometools/cli-win32-arm64": "11.0.0",
++        "@rometools/cli-win32-x64": "11.0.0"
++      }
++    },
++    "node_modules/scheduler": {
++      "version": "0.23.2",
++      "resolved": "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz",
++      "integrity": "sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "loose-envify": "^1.1.0"
++      }
++    },
++    "node_modules/semver": {
++      "version": "7.8.5",
++      "resolved": "https://registry.npmjs.org/semver/-/semver-7.8.5.tgz",
++      "integrity": "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==",
++      "license": "ISC",
++      "bin": {
++        "semver": "bin/semver.js"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/typescript": {
++      "version": "4.9.5",
++      "resolved": "https://registry.npmjs.org/typescript/-/typescript-4.9.5.tgz",
++      "integrity": "sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "bin": {
++        "tsc": "bin/tsc",
++        "tsserver": "bin/tsserver"
++      },
++      "engines": {
++        "node": ">=4.2.0"
++      }
++    }
++  }
++}
+diff -ruN -x node_modules -x .git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -4,8 +4,8 @@
+   "description": "",
+   "main": "index.js",
+   "scripts": {
+-    "build:dev": "esbuild ./src/index.ts --bundle --sourcemap=inline --target=chrome91 --outfile=../framework.js",
+-    "build": "esbuild ./src/index.ts --minify --bundle --sourcemap --target=chrome91 --outfile=../framework.js",
++    "build:dev": "esbuild ./src/index.ts --bundle --sourcemap=inline --target=chrome116 --outfile=../dist/framework.js",
++    "build": "esbuild ./src/index.ts --bundle --minify --sourcemap=inline --target=chrome116 --outfile=../dist/framework.js",
+     "gentypes": "tsc --outfile index.d.ts --module none && rome format --write ./index.d.ts",
+     "fmt": "rome format --write ./src ./index.d.ts",
+     "test": "echo \"Error: no test specified\" && exit 1"
+diff -ruN -x node_modules -x .git a/src/betterncm-api/app.ts b/src/betterncm-api/app.ts
+--- a/src/betterncm-api/app.ts
++++ b/src/betterncm-api/app.ts
+@@ -1,4 +1,5 @@
+ import { betterncmFetch } from "./base";
++import { isMac } from "../mac";
+ 
+ const e = encodeURIComponent;
+ 
+@@ -69,6 +70,8 @@
+ 	export async function getDataPath() {
+ 		const r = await betterncmFetch("/app/datapath");
+ 		const p = await r.text();
++		// macOS 下保持 POSIX 路径
++		if (isMac()) return p;
+ 		return p.replace(/\//g, "\\");
+ 	}
+ 
+diff -ruN -x node_modules -x .git a/src/betterncm-api/ncm.ts b/src/betterncm-api/ncm.ts
+--- a/src/betterncm-api/ncm.ts
++++ b/src/betterncm-api/ncm.ts
+@@ -1,3 +1,5 @@
++import { findReactProp } from "../mac";
++
+ const cachedFunctionMap: Map<string, Function> = new Map();
+ 
+ // rome-ignore lint/suspicious/noExplicitAny: 函数类型可随意
+@@ -48,13 +50,22 @@
+ 		return window?.APP_CONF?.appver || "0.0.0.0";
+ 	}
+ 
++	// macOS NCM 3.x 的 appver 只有三段（"3.1.14"），构建号只在 UA 里
++	// （"NeteaseMusicDesktop/3.1.14.3459"）
++	const isThreePartVersion = (v: string) => v.split(".").length === 3;
++
+ 	export function getNCMVersion(): string {
+ 		const v = getNCMFullVersion();
++		if (isThreePartVersion(v)) return v;
+ 		return v.substring(0, v.lastIndexOf("."));
+ 	}
+ 
+ 	export function getNCMBuild(): number {
+ 		const v = getNCMFullVersion();
++		if (isThreePartVersion(v)) {
++			const m = navigator.userAgent.match(/NeteaseMusicDesktop\/[\d.]+\.(\d+)/);
++			return m ? parseInt(m[1]) : 0;
++		}
+ 		return parseInt(v.substring(v.lastIndexOf(".") + 1));
+ 	}
+ 
+@@ -226,22 +237,70 @@
+ 	// rome-ignore lint/suspicious/noExplicitAny: 这个是网易云自己暴露的对象，里头有很多可以利用的函数
+ 	declare const ctl: any;
+ 
++	// rome-ignore lint/suspicious/noExplicitAny: dva (redux) store
++	let cachedDvaStore: any = null;
++	/**
++	 * 获取网易云自己的 dva (redux) store，找不到时返回 null
++	 */
++	function getDvaStore() {
++		if (cachedDvaStore === null) {
++			cachedDvaStore = findReactProp(
++				"store",
++				(s) =>
++					typeof s.getState === "function" &&
++					typeof s.dispatch === "function",
++			);
++		}
++		return cachedDvaStore;
++	}
++
++	/**
++	 * 从 dva store 的 playing 状态构造旧版 getPlaying 的返回值
++	 * （NCM 3.x macOS 上没有 dc / ctl，找不到 getPlaying 函数）
++	 */
++	function getPlayingFromStore() {
++		const playing = getDvaStore()?.getState?.()?.playing;
++		if (!playing) return null;
++		const track = playing.curTrack ?? playing.curVoice;
++		if (!track) return null;
++		const curPlaying = playing.curPlaying ?? {};
++		return {
++			data: {
++				...track,
++				id: track.id,
++				name: track.name,
++				artists: track.artists ?? [],
++				album: track.album ?? {},
++				duration: track.duration,
++			},
++			// 与旧版一致：1 暂停，2 播放（NCM 3.x 的 playingState 使用相同的数值）
++			state: playing.playingState,
++			from: curPlaying.fromInfo ?? {},
++			originFromTrack: curPlaying,
++			track: curPlaying.track,
++		};
++	}
++
+ 	let cachedGetPlayingFunc: Function | null = null;
++	// 找到了 dva store 却找不到 getPlaying 时，不再每次都遍历 window
++	let getPlayingSearchFailed = false;
+ 	/**
+ 	 * 获取当前正在播放的歌曲的信息，包括歌曲信息，来源，当前播放状态等
+ 	 * @todo 补全返回值类型
+ 	 * @returns 当前歌曲的播放信息
+ 	 */
+ 	export function getPlayingSong() {
+-		if (cachedGetPlayingFunc === null) {
++		if (cachedGetPlayingFunc === null && !getPlayingSearchFailed) {
+ 			const findResult = findApiFunction("getPlaying");
+ 			if (findResult) {
+ 				const [getPlaying, getPlayingRoot] = findResult;
+ 				cachedGetPlayingFunc = getPlaying.bind(getPlayingRoot);
++			} else if (getDvaStore()) {
++				getPlayingSearchFailed = true;
+ 			}
+ 		}
+ 		if (cachedGetPlayingFunc === null) {
+-			return null;
++			return getPlayingFromStore();
+ 		} else {
+ 			return cachedGetPlayingFunc();
+ 		}
+@@ -254,12 +313,13 @@
+ 	 */
+ 	export function getPlaying() {
+ 		const playing = getPlayingSong();
++		if (!playing) return null;
+ 		const result = {
+ 			id: playing.data.id as number,
+ 			title: playing.data.name as string,
+ 			type: "normal",
+ 		};
+-		if (playing.from.fm) {
++		if (playing.from?.fm) {
+ 			result.type = "fm";
+ 		}
+ 		return result;
+diff -ruN -x node_modules -x .git a/src/loader.ts b/src/loader.ts
+--- a/src/loader.ts
++++ b/src/loader.ts
+@@ -139,6 +139,8 @@
+ 	const AsyncFunction = async function () { }.constructor as any;
+ 	const pageMap = {
+ 		"/pub/app.html": "Main",
++		// macOS NCM 3.x serves the main window from orpheus://orpheus/app.html
++		"/app.html": "Main",
+ 	};
+ 	const pageName = pageMap[location.pathname];
+ 
+diff -ruN -x node_modules -x .git a/src/mac.ts b/src/mac.ts
+--- a/src/mac.ts
++++ b/src/mac.ts
+@@ -0,0 +1,33 @@
++/**
++ * @fileoverview
++ * betterncm-mac: helpers for NCM 3.x on macOS (CEF, driven over CDP)
++ */
++
++export const isMac = () => navigator.platform.startsWith("Mac");
++
++/**
++ * Walks the React fiber tree under `#root` (depth first, bounded) and returns
++ * the first `memoizedProps[key]` that passes `test`.
++ * Used to reach the dva store and the in-memory router history, which are not
++ * exposed on `window`.
++ */
++// rome-ignore lint/suspicious/noExplicitAny: React internals are untyped
++export function findReactProp<T = any>(
++	key: string,
++	// rome-ignore lint/suspicious/noExplicitAny: React internals are untyped
++	test: (value: any) => boolean = (value) => !!value,
++	limit = 20000,
++): T | null {
++	// rome-ignore lint/suspicious/noExplicitAny: React internals are untyped
++	const root = document.getElementById("root") as any;
++	const first = root?._reactRootContainer?._internalRoot?.current;
++	const stack = first ? [first] : [];
++	for (let visited = 0; stack.length > 0 && visited < limit; visited++) {
++		const fiber = stack.pop();
++		const value = fiber.memoizedProps?.[key];
++		if (value && typeof value === "object" && test(value)) return value;
++		if (fiber.sibling) stack.push(fiber.sibling);
++		if (fiber.child) stack.push(fiber.child);
++	}
++	return null;
++}
+diff -ruN -x node_modules -x .git a/src/plugin-manager/components/button.tsx b/src/plugin-manager/components/button.tsx
+--- a/src/plugin-manager/components/button.tsx
++++ b/src/plugin-manager/components/button.tsx
+@@ -6,7 +6,11 @@
+ 	const { children, className, ...other } = props;
+ 	const wrapperClass = React.useMemo(() => {
+ 		const is300 = APP_CONF.appver.startsWith('3.')
+-		return is300 && [...((document.querySelector('.cmd-button'))!.classList as unknown as string[])].find(v => v.startsWith('ButtonWrapper_'))
++		if (!is300) return ""
++		// 优先取顶栏里的按钮；页面上可能暂时没有任何 .cmd-button
++		const cmdButton = document.querySelector('#page_pc_main_nav .cmd-button') ?? document.querySelector('.cmd-button')
++		if (!cmdButton) return ""
++		return [...(cmdButton.classList as unknown as string[])].find(v => v.startsWith('ButtonWrapper_')) ?? ""
+ 	}, [])
+ 	return (
+ 		<a className={`${wrapperClass} u-ibtn5 u-ibtnsz8 cmd-button cmd-button-outlineSec cmd-button-size-m cmd-button-outline-sec button-item
+diff -ruN -x node_modules -x .git a/src/plugin-manager/components/header.tsx b/src/plugin-manager/components/header.tsx
+--- a/src/plugin-manager/components/header.tsx
++++ b/src/plugin-manager/components/header.tsx
+@@ -1,6 +1,7 @@
+ import { satisfies } from "semver";
+ import BetterNCM from "../../betterncm-api";
+ import { disableSafeMode, isSafeMode, loadedPlugins } from "../../loader";
++import { isMac } from "../../mac";
+ import { Button } from "./button";
+ import { ProgressRing } from "./progress-ring";
+ 
+@@ -22,6 +23,8 @@
+ 		React.useState("transparent"); // #F004 #0F04
+ 
+ 	const safeMode = React.useMemo(() => isSafeMode(), []);
++	// macOS 版没有 betterncm.dll，也不走 Windows 的更新流程
++	const mac = React.useMemo(isMac, []);
+ 
+ 	const [latestVersion, setLatestVersion] =
+ 		React.useState<ReleaseVersion | null>(null);
+@@ -33,6 +36,7 @@
+ 			plugin.manifest.require_restart || plugin.manifest.native_plugin) !== -1, [])
+ 
+ 	React.useEffect(() => {
++		if (mac) return;
+ 		(async () => {
+ 			if (!latestVersion) {
+ 				const betterNCMVersion = await BetterNCM.app.getBetterNCMVersion();
+@@ -79,6 +83,7 @@
+ 	}, [latestVersion]);
+ 
+ 	const onUpdateButtonClicked = React.useCallback(async () => {
++		if (mac) return;
+ 		if (latestVersion && latestVersion.version !== currentVersion) {
+ 			const ncmpath = await BetterNCM.app.getNCMPath();
+ 			const datapath = await BetterNCM.app.getDataPath();
+@@ -129,7 +134,7 @@
+ 			/>
+ 			<div>
+ 				<h1>
+-					BetterNCM{" "}
++					{mac ? "BetterNCM-mac" : "BetterNCM"}{" "}
+ 					<span style={{ fontSize: "smaller", opacity: "0.8" }}>
+ 						{betterncm_native.app.version()}
+ 					</span>
+@@ -137,8 +142,10 @@
+ 				<div className="bncm-mgr-btns">
+ 					<Button
+ 						onClick={async () => {
++							const dataPath = await BetterNCM.app.getDataPath();
+ 							BetterNCM.app.exec(
+-								`explorer "${(await BetterNCM.app.getDataPath()).replace(
++								// macOS 上由 API 服务器把 explorer 转换为 open
++								`explorer "${mac ? dataPath : dataPath.replace(
+ 									/\//g,
+ 									"\\",
+ 								)}"`,
+@@ -194,7 +201,7 @@
+ 
+ 
+ 
+-					<Button
++					{!mac && <Button
+ 						style={{
+ 							display: "flex",
+ 							alignItems: "center",
+@@ -214,7 +221,7 @@
+ 						) : (
+ 							<>点击更新到 {latestVersion.version}</>
+ 						)}
+-					</Button>
++					</Button>}
+ 				</div>
+ 			</div>
+ 			<div className="m-tool">
+diff -ruN -x node_modules -x .git a/src/plugin-manager/index.tsx b/src/plugin-manager/index.tsx
+--- a/src/plugin-manager/index.tsx
++++ b/src/plugin-manager/index.tsx
+@@ -1,5 +1,6 @@
+ import BetterNCM from "../betterncm-api";
+ import { isSafeMode, loadedPlugins } from "../loader";
++import { findReactProp } from "../mac";
+ import { NCMPlugin } from "../plugin";
+ import { HeaderComponent } from "./components/header";
+ import { SafeModeInfo } from "./components/safe-mode-info";
+@@ -7,20 +8,57 @@
+ 
+ const OPENED_WARNINGS = "config.betterncm.manager.openedwarnings";
+ 
++// 主页面视图，按优先级查找
++// macOS NCM 3.x: div.AppScrollContainer_*[data-testid=tid_scroll_container]，即顶栏下方的整个右侧区域
++const MAIN_PAGE_SELECTORS = [
++	"section[class*=RightContainer_] > [data-testid=tid_scroll_container]",
++	"[data-testid=tid_scroll_container], .right-container, section.g-mn",
++];
++
++const SETTINGS_BUTTON_SELECTOR =
++	'[data-testid=tid_header_setting_btn], .cmd-icon-setting, a[href="#/m/setting/"]';
++
++// 点击这些区域时关闭设置页面（跳转到其它页面或打开了播放页）
++const CLICK_HIDE_AREAS = [
++	"[class^=LeftScrollContainer_]",
++	"[data-testid=tid_left_scroll_container]",
++	"[class^=MiniModeIconBar_]",
++	"[class^=CommentWrapper_]",
++	// macOS NCM 3.x 底栏歌曲信息 / 歌词按钮 / 播放页（取代 NCM 2.x 的 u-cover-sm 封面按钮）
++	"[class*=songPlayInfo_]",
++	"[class*=SongPlayInfo_]",
++	"[data-testid=tid_playbar_lyric_btn]",
++	"#vinyl-page-container",
++];
++
++const queryFirst = (selectors: string[]) => {
++	for (const selector of selectors) {
++		const ele = document.querySelector<HTMLElement>(selector);
++		if (ele) return ele;
++	}
++	return null;
++};
++
+ export async function initPluginManager() {
+ 	// 准备设置页面和访问按钮
+ 	const settingsView = document.createElement("section");
+-	const mainPageView: HTMLElement = (await BetterNCM.utils.waitForElement(
+-		".right-container, section.g-mn",
++	let mainPageView: HTMLElement = (await BetterNCM.utils.waitForFunction(() =>
++		queryFirst(MAIN_PAGE_SELECTORS),
+ 	))!!;
+ 	const settingsButton = (await BetterNCM.utils.waitForElement(
+-		'.cmd-icon-setting, a[href="#/m/setting/"]',
++		SETTINGS_BUTTON_SELECTOR,
+ 	))!! as HTMLAnchorElement;
+ 	const betterNCMSettingsButton = settingsButton.cloneNode(
+ 		true,
+ 	) as HTMLAnchorElement;
+ 	betterNCMSettingsButton.href = "javascript:void(0)";
+ 	betterNCMSettingsButton.title = "BetterNCM";
++	// 克隆出来的按钮不能被当成网易云自己的设置按钮
++	betterNCMSettingsButton.removeAttribute("data-testid");
++	betterNCMSettingsButton.removeAttribute("data-log");
++	betterNCMSettingsButton.classList.remove("cmd-icon-setting");
++	betterNCMSettingsButton.setAttribute("role", "button");
++	betterNCMSettingsButton.style.cursor = "pointer";
+ 
+ 	if (localStorage.getItem(OPENED_WARNINGS) !== "true")
+ 		betterNCMSettingsButton.classList.add("bncm-btn-twinkling");
+@@ -33,53 +71,129 @@
+ 		settingsView,
+ 		mainPageView.nextElementSibling,
+ 	);
+-	settingsButton.parentElement!!.appendChild(betterNCMSettingsButton);
++	// 设置按钮在 macOS 上被包在若干层容器里，插到图标栏里那一层的后面
++	const settingsButtonSlot = settingsButton.closest("[class*=IconBar_] > *");
++	if (settingsButtonSlot) settingsButtonSlot.after(betterNCMSettingsButton);
++	else settingsButton.parentElement!!.appendChild(betterNCMSettingsButton);
+ 	ReactDOM.render(<PluginManager />, settingsView);
+ 
+ 	settingsView.classList.add("better-ncm-manager");
+ 	settingsView.classList.add("g-mn");
+ 
++	// 设置页面覆盖在主页面视图上，位置大小跟随主页面视图
++	// （侧栏可以拖拽改变大小，窗口大小也会变）
++	const syncGeometry = () => {
++		const container = mainPageView.offsetParent as HTMLElement | null;
++		if (!container || mainPageView.offsetWidth === 0) return;
++		const left = Math.max(0, mainPageView.offsetLeft);
++		const right = Math.min(
++			container.clientWidth,
++			mainPageView.offsetLeft + mainPageView.offsetWidth,
++		);
++		let height = mainPageView.offsetHeight;
++		// 底部播放栏是 position: fixed 的，会盖住主页面视图的底部
++		const playBar = document.querySelector("footer[class^=Container_]");
++		if (playBar) {
++			const box = mainPageView.getBoundingClientRect();
++			const barTop = playBar.getBoundingClientRect().top;
++			const scale = box.height / mainPageView.offsetHeight || 1;
++			if (barTop > box.top && barTop < box.bottom)
++				height -= (box.bottom - barTop) / scale;
++		}
++		settingsView.style.top = `${mainPageView.offsetTop}px`;
++		settingsView.style.left = `${left}px`;
++		settingsView.style.width = `${Math.max(0, right - left)}px`;
++		settingsView.style.height = `${Math.max(0, height)}px`;
++	};
++	const resizeObserver = new ResizeObserver(syncGeometry);
++	const observeGeometry = () => {
++		resizeObserver.disconnect();
++		resizeObserver.observe(mainPageView);
++		if (mainPageView.parentElement)
++			resizeObserver.observe(mainPageView.parentElement);
++		const playBar = document.querySelector("footer[class^=Container_]");
++		if (playBar) resizeObserver.observe(playBar);
++	};
++	observeGeometry();
++
++	// 页面跳转时关闭设置页面
++	// NCM 3.x 使用内存路由，hashchange 不会触发，所以监听路由 history 和主页面视图内的页面元素
++	let stopWatchingPage = () => { };
++	const currentPage = () =>
++		mainPageView.querySelector("[id^=page_pc_]") ??
++		mainPageView.querySelector(".right-container")?.firstElementChild ??
++		null;
++	function watchPage() {
++		stopWatchingPage();
++		const page = currentPage();
++		const pageId = page?.id;
++		const observer = new MutationObserver(() => {
++			const now = currentPage();
++			if (now !== page || now?.id !== pageId) hideSettings();
++		});
++		observer.observe(mainPageView, {
++			childList: true,
++			subtree: true,
++			attributeFilter: ["id"],
++		});
++		const history = findReactProp(
++			"history",
++			(h) => typeof h.listen === "function" && "location" in h,
++		);
++		let unlisten: unknown = null;
++		// dva 包装过的 history.listen 会先同步调用一次监听器（传入当前 location），忽略这一次
++		let armed = false;
++		try {
++			unlisten = history?.listen(() => {
++				if (armed) hideSettings();
++			});
++			armed = true;
++		} catch (e) {
++			console.warn("[BetterNCM] Failed to listen to router history", e);
++		}
++		stopWatchingPage = () => {
++			observer.disconnect();
++			if (typeof unlisten === "function") unlisten();
++			stopWatchingPage = () => { };
++		};
++	}
++
+ 	function showSettings() {
+ 		// debugger
+ 		// 有插件似乎会替换主页元素，导致我们的设置页面无法显示，需要进行检查
++		if (!mainPageView.isConnected) {
++			mainPageView = queryFirst(MAIN_PAGE_SELECTORS) ?? mainPageView;
++			observeGeometry();
++		}
+ 		if (settingsView.parentElement !== mainPageView.parentElement) {
+ 			mainPageView.parentElement!!.insertBefore(
+ 				settingsView,
+ 				mainPageView.nextElementSibling,
+ 			);
+ 		}
++		syncGeometry();
+ 		settingsView.classList.add("ncmm-show");
+ 		// 有些主题插件会给我们主页上 !important 优先级修饰符
+ 		// 所以得这样硬碰硬
+-		mainPageView.setAttribute("style", "display: none !important;");
++		// 用 visibility 而不是 display，主页面视图保持布局，位置大小才能继续同步；
++		// 只改这一个属性，不能覆盖网易云自己设置的内联样式（CSS 变量）
++		mainPageView.style.setProperty("visibility", "hidden", "important");
++		watchPage();
+ 	}
+ 
+ 	function hideSettings() {
++		stopWatchingPage();
+ 		settingsView.classList.remove("ncmm-show");
+-		mainPageView.removeAttribute("style");
++		mainPageView.style.removeProperty("visibility");
+ 	}
+ 
+ 	window.addEventListener('click', (e) => {
+-		const clickHideAreas = [
+-			'[class^=LeftScrollContainer_]',
+-			'[class^=MiniModeIconBar_]',
+-			'[class^=CommentWrapper_]'
+-		];
+-
+-		for (const ele of e.path) {
++		for (const ele of e.composedPath() as HTMLElement[]) {
+ 			if (ele.title === 'BetterNCM') return;
+-			if (clickHideAreas.some(s => ele.matches?.(s))) hideSettings();
++			if (CLICK_HIDE_AREAS.some(s => ele.matches?.(s))) hideSettings();
+ 		}
+ 	})
+ 
+-	!(async () => {
+-		const lyricButton = (await BetterNCM.utils.waitForElement(
+-			"div.cover.u-cover.u-cover-sm > a > span",
+-			1000,
+-		))!! as HTMLAnchorElement;
+-		lyricButton.addEventListener("click", hideSettings);
+-	})();
+-
+ 	settingsButton.addEventListener("click", hideSettings);
+ 	betterNCMSettingsButton.addEventListener("click", () => {
+ 		if (settingsView.classList.contains("ncmm-show")) {
+@@ -91,16 +205,6 @@
+ 
+ 	// 如果外部页面变更（点击了其它按钮跳转）则关闭设置页面
+ 	window.addEventListener("hashchange", hideSettings);
+-	new MutationObserver((rs) => {
+-		for (const r of rs) {
+-			if (r.attributeName === "style") {
+-				// 侧栏是可以拖拽改变大小的，所以我们也要一起同步修改
+-				settingsView.style.left = mainPageView.style.left;
+-			}
+-		}
+-	}).observe(mainPageView, {
+-		attributes: true,
+-	});
+ }
+ 
+ export let onPluginLoaded = (_: typeof loadedPlugins) => { };
+@@ -150,7 +254,8 @@
+ 		}
+ 
+ 		pluginConfigRef.current?.replaceChildren(...myDomElement);
+-	}, [selectedPlugin]);
++		// 首次使用时先显示的是启动警告，配置容器关闭警告后才挂载，所以也要依赖 showStartupWarnings
++	}, [selectedPlugin, showStartupWarnings]);
+ 
+ 	return (
+ 		<div className="bncm-mgr">
+diff -ruN -x node_modules -x .git a/src/styles/index.css b/src/styles/index.css
+--- a/src/styles/index.css
++++ b/src/styles/index.css
+@@ -1,15 +1,8 @@
+ @import url(./startup-warning.css);
+ @import url(./spinner.css);
+ 
+-[class^=IconBar_] {
+-    width: 200px;
+-}
++/* macOS NCM 3.x: the header icon bars size to their content; a fixed width would break them */
+ 
+-[class^=MiniModeIconBar_] {
+-    width: 160px;
+-    gap: 5px !important;
+-}
+-
+ [class^=WindowOpBarContainer_] {
+     gap: 5px !important;
+ }
+@@ -19,15 +12,13 @@
+     box-sizing: border-box;
+ }
+ 
++/* top / left / width / height are set inline from the main page view (plugin-manager/index.tsx) */
+ section.better-ncm-manager {
+     display: none !important;
+-    background: transparent !important;
++    background: var(--colorBackground, var(--colorBackgroundWhite, #fff));
++    color: var(--colorBlack1, inherit);
+     z-index: 70;
+-    left: 20px;
+-    top: 0px;
+-    bottom: 73px;
+-    right: 0;
+-    overflow: hidden overlay;
++    overflow: auto;
+     position: absolute;
+ }
+ 
+@@ -35,10 +26,6 @@
+     display: block !important;
+ }
+ 
+-body.mq-playing section.better-ncm-manager.ncmm-show {
+-    display: none !important;
+-}
+-
+ .bncm-mgr {
+     overflow: hidden;
+     position: relative;
+@@ -211,11 +198,6 @@
+     align-items: center;
+ }
+ 
+-#x-g-mn section.better-ncm-manager.g-mn.ncmm-show {
+-    left: 220px !important;
+-    top: 40px !important;
+-}
+-
+ .bncm-mgr {
+-    font-family: Tahona, Microsoft Yahei;
++    font-family: Tahona, Microsoft Yahei, PingFang SC, sans-serif;
+ }

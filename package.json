@@ -1,0 +1,25 @@
+{
+  "name": "betterncm-mac",
+  "version": "0.1.0",
+  "description": "BetterNCM II for NetEase Cloud Music on macOS, injected over the Chrome DevTools Protocol without modifying the app",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "bncm-mac": "bin/bncm-mac.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:fw": "cd framework && npm ci && npm run build",
+    "patch:fw": "node scripts/vendor-framework.mjs",
+    "start": "node bin/bncm-mac.mjs launch",
+    "attach": "node bin/bncm-mac.mjs attach",
+    "doctor": "node bin/bncm-mac.mjs doctor",
+    "install-app": "node bin/bncm-mac.mjs install-app",
+    "test": "node --test 'test/*.test.mjs'"
+  },
+  "dependencies": {
+    "semver": "^7.8.0"
+  }
+}
