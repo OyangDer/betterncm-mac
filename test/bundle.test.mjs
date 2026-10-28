@@ -189,6 +189,7 @@ test('look-and-feel preludes only run when their config key is true', () => {
   const optional = {
     'compat-rnp-layout.js': `window.__order.push('layout');`,
     'compat-rnp-cover.js': `window.__order.push('cover');`,
+    'compat-rnp-top-controls.js': `window.__order.push('top');`,
     'stop-mini-vinyl.js': `window.__order.push('vinyl');`,
     'compat-rnp-lyric-size.js': `window.__order.push('lyricsize');`,
   };
@@ -197,8 +198,8 @@ test('look-and-feel preludes only run when their config key is true', () => {
     const order = (cfg) => runPage(buildInjection(baseOpts({ cfg: { ...baseOpts().cfg, ...cfg } }))).__order;
     const off = order({});
     assert.ok(off.includes('extra'));
-    for (const n of ['layout', 'cover', 'vinyl', 'lyricsize']) assert.ok(!off.includes(n), `${n} ran without its key`);
-    assert.deepEqual(order({ 'mac.rnpAppleStyle': 'true' }).filter((n) => ['layout', 'cover', 'vinyl'].includes(n)), ['cover', 'layout']);
+    for (const n of ['layout', 'cover', 'top', 'vinyl', 'lyricsize']) assert.ok(!off.includes(n), `${n} ran without its key`);
+    assert.deepEqual(order({ 'mac.rnpAppleStyle': 'true' }).filter((n) => ['layout', 'cover', 'top', 'vinyl'].includes(n)), ['cover', 'layout', 'top']);
     assert.deepEqual(order({ 'mac.stopMiniVinyl': 'true' }).filter((n) => ['layout', 'cover', 'vinyl'].includes(n)), ['vinyl']);
     assert.ok(order({ 'mac.rnpAutoLyricSize': 'true' }).includes('lyricsize'));
   } finally {

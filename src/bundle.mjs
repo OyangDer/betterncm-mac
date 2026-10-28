@@ -14,6 +14,7 @@ const TOP_FRAME = ['channel-shim.js'];
 const OPTIONAL_PRELUDE = {
   'compat-rnp-layout.js': 'mac.rnpAppleStyle',
   'compat-rnp-cover.js': 'mac.rnpAppleStyle',
+  'compat-rnp-top-controls.js': 'mac.rnpAppleStyle',
   'stop-mini-vinyl.js': 'mac.stopMiniVinyl',
   'compat-rnp-lyric-size.js': 'mac.rnpAutoLyricSize',
 };

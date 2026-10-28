@@ -54,7 +54,7 @@ node bin/bncm-mac.mjs install-app --dock
 
 | 配置 | 作用 |
 |---|---|
-| `mac.rnpAppleStyle` | 让 RefinedNowPlayingNext 更像 Apple Music：歌词栏更窄，封面更大，封面和控件稍微下移，音量变成“···”旁边的小按钮（鼠标放上去展开），暂停时封面缩小 |
+| `mac.rnpAppleStyle` | 让 RefinedNowPlayingNext 更像 Apple Music：歌词栏更窄，封面更大，封面和控件稍微下移，音量变成“···”旁边的小按钮（鼠标放上去展开），暂停时封面缩小；右上角的 × 换成常驻的向下收起箭头，设置和歌词复制模式按钮移到它旁边，只在鼠标靠近时出现 |
 | `mac.stopMiniVinyl` | 让播放栏左下角的小黑胶不再转圈，更省电 |
 | `mac.rnpAutoLyricSize` | 歌词字号跟着窗口大小变：RefinedNowPlayingNext 设置里的“字体大小”当作全屏时的字号，窗口变小就按比例缩小（最小一半，不小于 16px） |
 

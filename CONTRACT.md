@@ -46,7 +46,7 @@ Mac-only config keys, with these defaults:
 | `mac.allowExec` | `'false'` |
 | `mac.allowFsOutsideData` | `'false'` |
 | `mac.autoForceUpdate` | `'false'` |
-| `mac.rnpAppleStyle` | `'false'` (runs `compat-rnp-layout.js`, `compat-rnp-cover.js`) |
+| `mac.rnpAppleStyle` | `'false'` (runs `compat-rnp-layout.js`, `compat-rnp-cover.js`, `compat-rnp-top-controls.js`) |
 | `mac.stopMiniVinyl` | `'false'` (runs `stop-mini-vinyl.js`) |
 | `mac.rnpAutoLyricSize` | `'false'` (runs `compat-rnp-lyric-size.js`) |
 
