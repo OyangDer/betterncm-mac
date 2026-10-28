@@ -7,12 +7,15 @@
 // cheap again. drop-shadow's blur is a standard deviation; text-shadow's is a radius (2 sigma),
 // hence 10px for RNPN's 5px. The static title and song info keep the original filter.
 //
-// While the lyric page is open it also stops work nobody can see:
+// It also stops work nobody can see:
 // - the progress thumb's `width` transition, which re-lays out the page every frame as progress
 //   ticks in (~60 layouts/s -> ~40); a step every 100 ms is well under a pixel;
-// - NCM's mini vinyl in the play bar, which keeps spinning underneath the page;
-// - the page's full-window backdrop blur, which is invisible behind its opaque background but
-//   still samples everything underneath it.
+// - while the lyric page is open, the page's full-window backdrop blur, which is invisible
+//   behind its opaque background but still samples everything underneath it.
+//
+// NCM's mini vinyl in the play bar is stopped altogether: its endless rotation alone keeps the
+// page producing frames (~60 style recalcs/s -> ~13 with nothing else playing) and the window
+// being recomposited, even with the lyric page closed.
 
 const STYLE_ID = 'bncm-compat-rnp-perf';
 const CSS = `
@@ -23,7 +26,7 @@ body.rnp-text-glow .rnp-contributors > div {
   text-shadow: 0 4px 10px rgba(var(--rnp-accent-color-shade-2-rgb), 0.27);
 }
 #rnp-view .appkit-now-playing-slider .thumb { transition: none !important; }
-body.rnp-lyric-page-open [class*="miniVinylWrapper"] { animation-play-state: paused !important; }
+[class*="miniVinylWrapper"] { animation-play-state: paused !important; }
 body.rnp-lyric-page-open #rnp-view { backdrop-filter: none !important; }
 `;
 
