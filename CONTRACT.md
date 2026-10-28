@@ -48,6 +48,7 @@ Mac-only config keys, with these defaults:
 | `mac.autoForceUpdate` | `'false'` |
 | `mac.rnpAppleStyle` | `'false'` (runs `compat-rnp-layout.js`, `compat-rnp-cover.js`) |
 | `mac.stopMiniVinyl` | `'false'` (runs `stop-mini-vinyl.js`) |
+| `mac.rnpAutoLyricSize` | `'false'` (runs `compat-rnp-lyric-size.js`) |
 
 Not in the defaults (so not in `__BNCM_CFG__`): `mac.ncmApp` (NCM bundle path) and `mac.warnedNcmVersion` (last untested version warned about).
 

@@ -9,11 +9,13 @@ import { log } from './log.mjs';
 const ORPHEUS_FRAMES = ['polyfills.js', 'native-shim.js', 'hijack-runtime.js', 'devtools-key.js'];
 const TOP_FRAME = ['channel-shim.js'];
 // Extras that change the look rather than fix something, each behind a config key that must be
-// 'true': Apple Music-style RefinedNowPlayingNext layout and cover motion, a still mini vinyl.
+// 'true': Apple Music-style RefinedNowPlayingNext layout and cover motion, a still mini vinyl,
+// lyrics sized to the window.
 const OPTIONAL_PRELUDE = {
   'compat-rnp-layout.js': 'mac.rnpAppleStyle',
   'compat-rnp-cover.js': 'mac.rnpAppleStyle',
   'stop-mini-vinyl.js': 'mac.stopMiniVinyl',
+  'compat-rnp-lyric-size.js': 'mac.rnpAutoLyricSize',
 };
 
 const missingWarned = new Set();

@@ -28,6 +28,7 @@ export const MAC_DEFAULTS = Object.freeze({
   // Look-and-feel changes some like and some do not (src/bundle.mjs OPTIONAL_PRELUDE).
   'mac.rnpAppleStyle': 'false',
   'mac.stopMiniVinyl': 'false',
+  'mac.rnpAutoLyricSize': 'false',
 });
 
 const DATA_SUBDIRS = ['plugins', 'plugins_runtime', 'plugins_dev', 'log', 'run'];

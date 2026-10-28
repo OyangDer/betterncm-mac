@@ -44,17 +44,19 @@ node bin/bncm-mac.mjs install-app --dock
 
 ### 可选外观
 
-下面两项默认关闭。要打开，就加上对应的键，然后运行 `node bin/bncm-mac.mjs reload` 或重启网易云：
+下面三项默认关闭。要打开，就加上对应的键，然后运行 `node bin/bncm-mac.mjs reload` 或重启网易云：
 
 ```json
 "mac.rnpAppleStyle": "true",
-"mac.stopMiniVinyl": "true"
+"mac.stopMiniVinyl": "true",
+"mac.rnpAutoLyricSize": "true"
 ```
 
 | 配置 | 作用 |
 |---|---|
 | `mac.rnpAppleStyle` | 让 RefinedNowPlayingNext 更像 Apple Music：歌词栏更窄，封面更大，封面和控件稍微下移，音量变成“···”旁边的小按钮（鼠标放上去展开），暂停时封面缩小 |
 | `mac.stopMiniVinyl` | 让播放栏左下角的小黑胶不再转圈，更省电 |
+| `mac.rnpAutoLyricSize` | 歌词字号跟着窗口大小变：RefinedNowPlayingNext 设置里的“字体大小”当作全屏时的字号，窗口变小就按比例缩小（最小一半，不小于 16px） |
 
 ### 其他
 
