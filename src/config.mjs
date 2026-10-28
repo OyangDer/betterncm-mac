@@ -4,10 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import semver from '../vendor/semver/index.js';
 import { log } from './log.mjs';
 
-export const NCM_APP = '/Applications/NeteaseMusic.app';
 export const BUNDLE_ID = 'com.netease.163music';
+// NCM versions this was tested on (3.1.14); others are injected anyway, after one warning.
+export const TESTED_NCM = '3.1.x';
+export const TESTED_NCM_LABEL = '3.1.14';
 export const BNCM_VERSION = '1.3.4';
 export const MAC_VERSION = '0.1.0';
 export const PROJECT_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -22,6 +25,9 @@ export const MAC_DEFAULTS = Object.freeze({
   'mac.allowExec': 'false',
   'mac.allowFsOutsideData': 'false',
   'mac.autoForceUpdate': 'false',
+  // Look-and-feel changes some like and some do not (src/bundle.mjs OPTIONAL_PRELUDE).
+  'mac.rnpAppleStyle': 'false',
+  'mac.stopMiniVinyl': 'false',
 });
 
 const DATA_SUBDIRS = ['plugins', 'plugins_runtime', 'plugins_dev', 'log', 'run'];
@@ -72,6 +78,18 @@ export function writeConfigKey(key, value) {
   cfg[key] = String(value);
   const file = configPath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  // A hand-edited file that does not parse reads as {}; keep a copy before writing over it.
+  try {
+    JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      const backup = `${file}.broken-${Date.now()}`;
+      try {
+        fs.copyFileSync(file, backup);
+        log(`config.json did not parse; saved it as ${backup} before writing ${key}`);
+      } catch { /* writing on is still better than failing */ }
+    }
+  }
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2));
   fs.renameSync(tmp, file);
@@ -83,6 +101,34 @@ export function getMacConfig() {
   const out = {};
   for (const [k, def] of Object.entries(MAC_DEFAULTS)) out[k] = Object.hasOwn(cfg, k) ? cfg[k] : def;
   return out;
+}
+
+const DEFAULT_NCM_APP = '/Applications/NeteaseMusic.app';
+
+// NCM's bundle: BNCM_NCM_APP or config.json's mac.ncmApp, else the usual places, else Spotlight
+// by bundle id. When none is found this stays the default path, so messages name a real place.
+function resolveNcmApp() {
+  const override = process.env.BNCM_NCM_APP || readConfig()['mac.ncmApp'];
+  if (override) return override.replace(/\/+$/, '');
+  const candidates = [DEFAULT_NCM_APP, path.join(os.homedir(), 'Applications/NeteaseMusic.app')];
+  const found = candidates.find((p) => fs.existsSync(p));
+  if (found) return found;
+  try {
+    const hits = execFileSync('/usr/bin/mdfind', [`kMDItemCFBundleIdentifier == '${BUNDLE_ID}'`], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000,
+    }).split('\n').filter((h) => h.endsWith('.app') && !h.includes('/.Trash/'));
+    if (hits.length) return hits[0];
+  } catch { /* Spotlight off or slow */ }
+  return DEFAULT_NCM_APP;
+}
+
+export const NCM_APP = resolveNcmApp();
+
+// -> 'ok' | 'untested' | 'unsupported'. NCM 2.x is a different app (WKWebView, no CDP).
+export function ncmSupport(ver) {
+  const v = semver.coerce(ver);
+  if (!v || v.major < 3) return 'unsupported';
+  return semver.satisfies(v, TESTED_NCM) ? 'ok' : 'untested';
 }
 
 export function isSafeMode() {

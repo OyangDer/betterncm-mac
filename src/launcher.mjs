@@ -5,7 +5,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { NCM_APP, BUNDLE_ID } from './config.mjs';
 import { fetchVersion, fetchTargets } from './cdp.mjs';
+import { alertDialog, confirmDialog } from './dialog.mjs';
 import { log } from './log.mjs';
+
+export { alertDialog, confirmDialog };
 
 const execFileP = promisify(execFile);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -70,23 +73,9 @@ export async function pickPort(preferred) {
   return p;
 }
 
-function osaString(s) {
-  return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
-}
-
-// Modal yes/no dialog. Cancel, error or timeout all count as "no".
-export async function confirmDialog(message, { ok = 'OK', cancel = 'Cancel', title = 'BetterNCM', timeoutSec = 300 } = {}) {
-  const script = `display dialog ${osaString(message)} with title ${osaString(title)} `
-    + `buttons {${osaString(cancel)}, ${osaString(ok)}} default button ${osaString(ok)} cancel button ${osaString(cancel)} `
-    + `with icon caution giving up after ${timeoutSec}`;
-  const r = await run('/usr/bin/osascript', ['-e', script]);
-  if (r.code !== 0) return false;
-  return r.stdout.includes(`button returned:${ok}`) && !r.stdout.includes('gave up:true');
-}
-
-export async function alertDialog(message, { title = 'BetterNCM' } = {}) {
-  const script = `display alert ${osaString(title)} message ${osaString(message)} as critical giving up after 120`;
-  await run('/usr/bin/osascript', ['-e', script]);
+// An error the user has already been shown in a dialog; callers must not show another one.
+export function shownError(message) {
+  return Object.assign(new Error(message), { alerted: true });
 }
 
 // Graceful quit through Apple Events, then wait for the process to go away.
@@ -94,8 +83,17 @@ export async function quitNcm({ timeout = 15000 } = {}) {
   const before = await findNcm();
   if (!before) return true;
   log(`asking NCM (pid ${before.pid}) to quit`);
-  const r = await run('/usr/bin/osascript', ['-e', `tell application id ${osaString(BUNDLE_ID)} to quit`]);
+  const r = await run('/usr/bin/osascript', ['-e', `tell application id "${BUNDLE_ID}" to quit`]);
   if (r.code !== 0) log('quit via AppleScript failed:', (r.stderr || '').trim());
+  // -1743: the user denied (or never answered) the Automation prompt; waiting will not help.
+  if (r.code !== 0 && /-1743|not authori[sz]ed/i.test(r.stderr || '')) {
+    await alertDialog(
+      'BetterNCM 没有控制网易云音乐的权限，无法让它退出。\n'
+      + '请到“系统设置 → 隐私与安全性 → 自动化”，在 BetterNCM（或你用的终端）下面打开“网易云音乐”，然后重新打开 BetterNCM。\n\n'
+      + 'BetterNCM is not allowed to control NetEase Cloud Music. Allow it in System Settings → Privacy & Security → Automation, then open BetterNCM again.',
+    );
+    throw shownError('not allowed to send Apple events to NCM (Automation permission)');
+  }
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     if (!isPidAlive(before.pid) && !(await findNcm())) return true;
@@ -177,13 +175,17 @@ export async function ensureNcm({ preferredPort = 9222, launch = true, port = nu
 
   if (running) {
     const yes = await confirmDialog(
-      'NetEase Cloud Music is running without BetterNCM.\n\nQuit and restart it with BetterNCM?',
-      { ok: 'Restart', cancel: 'Cancel' },
+      '网易云音乐正在运行，但没有加载 BetterNCM。要退出并用 BetterNCM 重新打开吗？\n\n'
+      + 'NetEase Cloud Music is running without BetterNCM. Quit and restart it with BetterNCM?',
+      { ok: '重新打开 Restart', cancel: '取消 Cancel' },
     );
-    if (!yes) throw new Error('NCM is running without the debug port and the user declined a restart');
+    if (!yes) {
+      throw Object.assign(new Error('NCM is running without the debug port and the user declined a restart'), { userCancelled: true });
+    }
     if (!(await quitNcm())) {
-      await alertDialog('NetEase Cloud Music did not quit. Quit it yourself, then open BetterNCM again.');
-      throw new Error('NCM did not quit');
+      await alertDialog('网易云音乐没有退出。请手动退出它，然后重新打开 BetterNCM。\n\n'
+        + 'NetEase Cloud Music did not quit. Quit it yourself, then open BetterNCM again.');
+      throw shownError('NCM did not quit');
     }
   }
 

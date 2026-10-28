@@ -1,7 +1,7 @@
 // Packed-plugin extraction and plugin enumeration (port of PluginManager.cpp).
 import fs from 'node:fs';
 import path from 'node:path';
-import semver from 'semver';
+import semver from '../vendor/semver/index.js'; // vendored (ISC), so a clone runs without npm install
 import { PROJECT_ROOT, getDataPath, getNcmVersion } from './config.mjs';
 import { log } from './log.mjs';
 import { readEntry, extractAll } from './zip.mjs';

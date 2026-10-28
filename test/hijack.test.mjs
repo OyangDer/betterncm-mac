@@ -1,6 +1,7 @@
 // Hijack transform engine (src/prelude/hijack-runtime.js), run in a vm context.
 // The NCM 3.1.14 web bundle is optional: set BNCM_NCM_WEBFILES to the extracted webfiles.zip
-// directory (the default is the research scratchpad); the tests that need it skip without it.
+// directory (default test/fixtures/webfiles, gitignored); the tests that need it skip without it.
+// To get it: unzip ~/Library/Application\ Support/com.netease.163music/Documents/webfiles.zip -d test/fixtures
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,8 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RUNTIME = fs.readFileSync(path.join(ROOT, 'src/prelude/hijack-runtime.js'), 'utf8');
-const WEBFILES = process.env.BNCM_NCM_WEBFILES
-  || '/tmp/scratch';
+const WEBFILES = process.env.BNCM_NCM_WEBFILES || path.join(ROOT, 'test/fixtures/webfiles');
 const VENDORS_FILE = path.join(WEBFILES, 'hybrid/vendors~app~subApp.chunk.18d435e.js');
 const VENDORS_URL = 'orpheus://orpheus/pub/hybrid/vendors~app~subApp.chunk.18d435e.js';
 const haveVendors = fs.existsSync(VENDORS_FILE);

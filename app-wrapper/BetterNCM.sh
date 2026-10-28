@@ -3,5 +3,48 @@
 # BetterNCM injected; if the injector is already running it only brings NCM to the front.
 DATA="${BETTERNCM_PROFILE:-$HOME/Library/Application Support/BetterNCM-mac}"
 mkdir -p "$DATA/log"
-# The injector logs to $DATA/log/injector.log itself; this file only catches crashes.
-exec {{NODE}} {{CLI}} launch --daemon >> "$DATA/log/wrapper.log" 2>&1
+NODE={{NODE}}
+CLI={{CLI}}
+
+alert() {
+  /usr/bin/osascript -e 'on run argv' -e 'display alert "BetterNCM" message (item 1 of argv) as critical' -e 'end run' "$1" >/dev/null 2>&1
+}
+
+node_ok() {
+  [ -x "$1" ] && "$1" -e 'process.exit(+process.versions.node.split(".")[0] < 22 ? 1 : 0)' >/dev/null 2>&1
+}
+
+# The node that install-app recorded can go away or be replaced (version manager switch,
+# uninstall). Finder starts apps with a minimal PATH, so look in the usual places, then ask a
+# login shell. A node that is too old is still used when nothing else is found: the CLI then
+# explains which version it needs.
+if ! node_ok "$NODE"; then
+  FOUND=""
+  OLD=""
+  [ -x "$NODE" ] && OLD="$NODE"
+  for n in /opt/homebrew/bin/node /usr/local/bin/node "$HOME/.volta/bin/node" \
+           "$(/bin/zsh -lic 'command -v node' 2>/dev/null </dev/null | tail -n 1)"; do
+    if node_ok "$n"; then FOUND="$n"; break; fi
+    [ -z "$OLD" ] && [ -x "$n" ] && OLD="$n"
+  done
+  NODE="${FOUND:-$OLD}"
+fi
+if [ -z "$NODE" ] || [ ! -x "$NODE" ]; then
+  alert "找不到 Node.js。请安装 Node.js 22 或更高版本，然后在项目文件夹里运行 node bin/bncm-mac.mjs install-app。
+
+Node.js was not found. Install Node.js 22 or later, then run install-app again."
+  exit 1
+fi
+if [ ! -f "$CLI" ]; then
+  alert "找不到 BetterNCM 的程序文件：
+$CLI
+
+项目文件夹可能被移动或删除了。请在它现在的位置运行 node bin/bncm-mac.mjs install-app。
+The BetterNCM folder was moved or deleted. Run install-app again from where it is now."
+  exit 1
+fi
+
+# The injector logs to $DATA/log/injector.log itself; this file only catches crashes. exec keeps
+# the injector in this app's process, so macOS attributes its Apple Events (quitting NCM) to
+# BetterNCM.app for the Automation permission.
+exec "$NODE" "$CLI" launch --daemon >> "$DATA/log/wrapper.log" 2>&1

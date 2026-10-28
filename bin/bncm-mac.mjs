@@ -7,12 +7,19 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
-  NCM_APP, BNCM_VERSION, MAC_VERSION, PROJECT_ROOT, getDataPath, ensureDataDirs, getNcmVersion, getNcmBuild,
-  getMacConfig, isSafeMode,
+  NCM_APP, BNCM_VERSION, MAC_VERSION, PROJECT_ROOT, TESTED_NCM_LABEL, getDataPath, ensureDataDirs, getNcmVersion,
+  getNcmBuild, getMacConfig, isSafeMode, ncmSupport,
 } from '../src/config.mjs';
 import { log, setQuiet } from '../src/log.mjs';
+import { alertDialogDetached } from '../src/dialog.mjs';
 
 const WRAPPER_ID = 'cc.microblock.betterncm-mac';
+const MIN_NODE = 22; // src/cdp.mjs uses the global WebSocket
+const NODE_MAJOR = Number(process.versions.node.split('.')[0]);
+
+// Set from --daemon: the Dock/Finder wrapper sends stderr to a log file, so errors there also
+// get a dialog.
+let daemonMode = false;
 
 const USAGE = `betterncm-mac ${MAC_VERSION} - BetterNCM for NetEase Cloud Music on macOS (via CDP)
 
@@ -24,6 +31,9 @@ Usage: bncm-mac <command> [options]
   reload                         re-extract plugins in the running injector and reload the pages
   install-app [--dest DIR]       write BetterNCM.app (default ~/Applications)
   uninstall-app [--dest DIR]     remove BetterNCM.app
+  uninstall [--purge] [--dest DIR]
+                                 stop the injector and remove BetterNCM.app; --purge also deletes
+                                 the data dir (plugins, settings, logs)
 
 Data dir: ${getDataPath()} (override with BETTERNCM_PROFILE)
 
@@ -33,6 +43,21 @@ CDP on 127.0.0.1, including the logged-in account and cookies.`;
 function fail(msg) {
   process.stderr.write(`bncm-mac: ${msg}\n`);
   process.exit(1);
+}
+
+async function showFatal(msg) {
+  if (!daemonMode) return;
+  try {
+    const { alertDialog } = await import('../src/dialog.mjs');
+    await alertDialog(`${msg}\n\n详细日志 / Log: ${path.join(getDataPath(), 'log')}`);
+  } catch { /* the log still has it */ }
+}
+
+function nodeTooOld() {
+  return NODE_MAJOR < MIN_NODE
+    ? `BetterNCM 需要 Node.js ${MIN_NODE} 或更高版本，当前是 ${process.version}（${process.execPath}）。\n`
+      + `BetterNCM needs Node.js ${MIN_NODE} or later; this is ${process.version}. Install a newer Node, then run install-app again.`
+    : null;
 }
 
 function portArg(v) {
@@ -46,7 +71,8 @@ async function cmdRun(mode, values) {
   if (values.daemon) setQuiet(true);
   const { runInjector, liveState } = await import('../src/injector.mjs');
   const { findNcm } = await import('../src/launcher.mjs');
-  let res = await runInjector({ mode, port: portArg(values.port) });
+  const notify = !!values.daemon;
+  let res = await runInjector({ mode, port: portArg(values.port), notify });
   if (res.alreadyRunning && mode === 'launch') {
     // Opening the wrapper twice should just bring NCM to the front, but only an NCM that has
     // the debug port: the other injector may be winding down (NCM quitting) or restarting it,
@@ -58,7 +84,7 @@ async function cmdRun(mode, values) {
         return 0;
       }
       if (!liveState()) {
-        res = await runInjector({ mode, port: portArg(values.port) });
+        res = await runInjector({ mode, port: portArg(values.port), notify });
         if (!res.alreadyRunning) return res.code;
       }
       if (Date.now() > deadline) break;
@@ -106,13 +132,52 @@ async function cmdReload() {
   return 0;
 }
 
+// The node and CLI paths a generated wrapper starts, or null when it is not ours.
+function wrapperTargets(app) {
+  try {
+    const sh = fs.readFileSync(path.join(app, 'Contents/MacOS/BetterNCM'), 'utf8');
+    const unquote = (v) => v?.replace(/^'|'$/g, '').replace(/'\\''/g, "'");
+    return { node: unquote(/^NODE=(.*)$/m.exec(sh)?.[1]), cli: unquote(/^CLI=(.*)$/m.exec(sh)?.[1]) };
+  } catch {
+    return null;
+  }
+}
+
 async function cmdDoctor() {
   const out = (k, v) => console.log(`${k.padEnd(14)} ${v}`);
+  const checks = [];
+  const check = (level, what) => checks.push(`${level.padEnd(4)} ${what}`);
+
   out('betterncm-mac', `${MAC_VERSION} (reports BetterNCM ${BNCM_VERSION}), node ${process.version}`);
   out('project', PROJECT_ROOT);
+  if (nodeTooOld()) check('FAIL', `node ${process.version} is too old; install Node.js ${MIN_NODE} or later`);
+  else check('OK', `node ${process.version}`);
 
-  const hasApp = fs.existsSync(NCM_APP);
+  const hasApp = fs.existsSync(path.join(NCM_APP, 'Contents/Info.plist'));
   out('NCM app', hasApp ? `${NCM_APP} ${getNcmVersion()} (build ${getNcmBuild()})` : `${NCM_APP} NOT FOUND`);
+  if (!hasApp) {
+    check('FAIL', `NetEase Cloud Music not found at ${NCM_APP} (install it, or set mac.ncmApp in config.json)`);
+  } else {
+    const ver = getNcmVersion();
+    const support = ncmSupport(ver);
+    if (support === 'ok') check('OK', `NetEase Cloud Music ${ver}`);
+    else if (support === 'untested') check('WARN', `NetEase Cloud Music ${ver} is untested (tested: ${TESTED_NCM_LABEL})`);
+    else check('FAIL', `NetEase Cloud Music ${ver} is not supported (3.x only)`);
+  }
+
+  const wrapper = appPath({});
+  const targets = fs.existsSync(wrapper) && bundleIdOf(wrapper) === WRAPPER_ID ? wrapperTargets(wrapper) : null;
+  if (!targets) {
+    check('WARN', `${wrapper} not installed (run install-app)`);
+  } else if (!targets.cli) {
+    check('WARN', `${wrapper} was made by an older install-app (run install-app again)`);
+  } else if (path.resolve(targets.cli) !== path.join(PROJECT_ROOT, 'bin/bncm-mac.mjs')) {
+    check('WARN', `${wrapper} starts ${targets.cli}, not this checkout (run install-app here to switch)`);
+  } else if (!targets.node || !fs.existsSync(targets.node)) {
+    check('WARN', `${wrapper} records node ${targets.node ?? '?'}, which is gone; it will look for another (run install-app)`);
+  } else {
+    check('OK', `${wrapper} (node ${targets.node})`);
+  }
 
   const { findNcm } = await import('../src/launcher.mjs');
   const ncm = await findNcm();
@@ -173,7 +238,14 @@ async function cmdDoctor() {
     const rt = path.join(dp, 'plugins_runtime');
     for (const n of fs.readdirSync(rt)) fs.rmSync(path.join(rt, n), { recursive: true, force: true });
   }
-  return 0;
+
+  console.log('');
+  for (const c of checks) console.log(c);
+  return checks.some((c) => c.startsWith('FAIL')) ? 1 : 0;
+}
+
+function readMacPort() {
+  return getMacConfig()['mac.cdpPort'];
 }
 
 function shellQuote(s) {
@@ -193,6 +265,17 @@ function bundleIdOf(app) {
   }
 }
 
+// Prefer a stable symlink to the running node over the versioned path process.execPath resolves
+// to (Homebrew's Cellar/node/<version>, which the next upgrade removes).
+function stableNodePath() {
+  for (const link of ['/opt/homebrew/bin/node', '/usr/local/bin/node']) {
+    try {
+      if (fs.realpathSync(link) === fs.realpathSync(process.execPath)) return link;
+    } catch { /* not there */ }
+  }
+  return process.execPath;
+}
+
 function cmdInstallApp(values) {
   const app = appPath(values);
   if (fs.existsSync(app)) {
@@ -204,10 +287,11 @@ function cmdInstallApp(values) {
   fs.mkdirSync(path.join(contents, 'Resources'), { recursive: true });
 
   const tpl = (f) => fs.readFileSync(path.join(PROJECT_ROOT, 'app-wrapper', f), 'utf8');
-  fs.writeFileSync(path.join(contents, 'Info.plist'), tpl('Info.plist').replaceAll('{{MAC_VERSION}}', MAC_VERSION));
+  // Replacer functions, so a `$` in a path is not read as a replacement pattern.
+  fs.writeFileSync(path.join(contents, 'Info.plist'), tpl('Info.plist').replaceAll('{{MAC_VERSION}}', () => MAC_VERSION));
   const script = tpl('BetterNCM.sh')
-    .replaceAll('{{NODE}}', shellQuote(process.execPath))
-    .replaceAll('{{CLI}}', shellQuote(path.join(PROJECT_ROOT, 'bin/bncm-mac.mjs')));
+    .replaceAll('{{NODE}}', () => shellQuote(stableNodePath()))
+    .replaceAll('{{CLI}}', () => shellQuote(path.join(PROJECT_ROOT, 'bin/bncm-mac.mjs')));
   const exe = path.join(contents, 'MacOS/BetterNCM');
   fs.writeFileSync(exe, script, { mode: 0o755 });
   fs.chmodSync(exe, 0o755);
@@ -223,9 +307,13 @@ function cmdInstallApp(values) {
   const now = new Date();
   fs.utimesSync(app, now, now); // nudge LaunchServices to pick up the bundle
   console.log(`installed ${app}`);
-  console.log(`node: ${process.execPath}`);
+  console.log(`node: ${stableNodePath()}`);
   console.log('Open BetterNCM.app instead of NetEase Cloud Music (keep it in the Dock).');
-  console.log('If node moves (e.g. a version manager upgrade), run install-app again.');
+  console.log('If this folder moves, run install-app again from the new place.');
+  console.log('');
+  console.log('Security: while NCM runs this way, any program on this Mac can control it over');
+  console.log(`CDP on 127.0.0.1 (port ${readMacPort()}), including the logged-in account and cookies.`);
+  console.log('Quit NetEase Cloud Music to close the port.');
   return 0;
 }
 
@@ -241,6 +329,47 @@ function cmdUninstallApp(values) {
   return 0;
 }
 
+async function cmdUninstall(values) {
+  const { liveState } = await import('../src/injector.mjs');
+  const { isPidAlive } = await import('../src/launcher.mjs');
+  const st = liveState();
+  if (st) {
+    console.log(`stopping the injector (pid ${st.injectorPid})`);
+    try { process.kill(st.injectorPid, 'SIGTERM'); } catch { /* already gone */ }
+    const deadline = Date.now() + 10000;
+    while (isPidAlive(st.injectorPid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 200));
+    if (isPidAlive(st.injectorPid)) fail(`the injector (pid ${st.injectorPid}) did not stop; nothing else was removed`);
+  }
+
+  const app = appPath(values);
+  if (!fs.existsSync(app)) console.log(`${app} is not installed`);
+  else if (bundleIdOf(app) !== WRAPPER_ID) console.log(`${app} is not a BetterNCM wrapper; left alone`);
+  else {
+    fs.rmSync(app, { recursive: true, force: true });
+    console.log(`removed ${app}`);
+  }
+
+  if (values.purge) {
+    const dp = getDataPath();
+    // Only a directory that looks like ours: BETTERNCM_PROFILE could point anywhere.
+    const ours = fs.existsSync(path.join(dp, 'plugins')) && fs.existsSync(path.join(dp, 'log'))
+      && dp !== os.homedir() && path.dirname(dp) !== dp;
+    if (!fs.existsSync(dp)) console.log(`${dp} does not exist`);
+    else if (!ours) console.log(`${dp} does not look like a BetterNCM data dir; left alone`);
+    else {
+      fs.rmSync(dp, { recursive: true, force: true });
+      console.log(`deleted ${dp}`);
+    }
+  }
+
+  console.log('');
+  console.log('NetEase Cloud Music itself was never modified. If it is running, quit it and open it');
+  console.log('again from its own icon: that closes the debug port and starts it without BetterNCM.');
+  if (!values.purge) console.log(`Plugins and settings are kept in ${getDataPath()} (uninstall --purge deletes them).`);
+  console.log(`This folder (${PROJECT_ROOT}) can be deleted by hand.`);
+  return 0;
+}
+
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -248,10 +377,12 @@ async function main() {
       daemon: { type: 'boolean' },
       port: { type: 'string' },
       dest: { type: 'string' },
+      purge: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
     },
   });
+  daemonMode = !!values.daemon;
   if (values.version) {
     console.log(MAC_VERSION);
     return 0;
@@ -261,6 +392,13 @@ async function main() {
     console.log(USAGE);
     return 0;
   }
+  // Check before anything touches NCM: on an old Node, launch would restart NCM with the debug
+  // port and only then fail to connect.
+  const tooOld = nodeTooOld();
+  if (tooOld && ['launch', 'attach', 'reload', 'install-app'].includes(cmd)) {
+    await showFatal(tooOld);
+    fail(tooOld);
+  }
   switch (cmd) {
     case 'launch': return cmdRun('launch', values);
     case 'attach': return cmdRun('attach', values);
@@ -268,19 +406,27 @@ async function main() {
     case 'reload': return cmdReload();
     case 'install-app': return cmdInstallApp(values);
     case 'uninstall-app': return cmdUninstallApp(values);
+    case 'uninstall': return cmdUninstall(values);
     default: fail(`unknown command: ${cmd}\n\n${USAGE}`);
   }
 }
 
+// Exit at once: the process is in an unknown state. The dialog runs on its own, once.
+let crashed = false;
 process.on('uncaughtException', (e) => {
   log('uncaught exception:', e);
+  if (daemonMode && !crashed) {
+    crashed = true;
+    alertDialogDetached(`BetterNCM 出错退出了。\n${e?.message ?? e}\n\n详细日志 / Log: ${path.join(getDataPath(), 'log')}`);
+  }
   process.exit(1);
 });
 process.on('unhandledRejection', (e) => {
   log('unhandled rejection:', e);
 });
 
-main().then((code) => process.exit(code ?? 0), (e) => {
+main().then((code) => process.exit(code ?? 0), async (e) => {
   log(e);
+  await showFatal(`BetterNCM 启动失败。\n${e?.message ?? e}`);
   process.exit(1);
 });

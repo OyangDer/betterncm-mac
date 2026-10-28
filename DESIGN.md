@@ -2,7 +2,7 @@
 
 ## 0. New facts from live probes
 
-I ran four probes against the running app (pid 4461, CDP 127.0.0.1:9222). Each paused request was continued and each session was detached; the page stayed responsive. The scripts are in `/tmp/scratch` (`fetchtest.mjs`, `dbgtest.mjs`, `srv.mjs`).
+I ran four probes against the running app (pid 4461, CDP 127.0.0.1:9222). Each paused request was continued and each session was detached; the page stayed responsive. The probe scripts were throwaway and are not in the repo.
 
 | ID | Finding | Consequence |
 |---|---|---|
@@ -375,7 +375,7 @@ Slug rule = C++ (keep `-` and non-ASCII). Log every decision.
 
 | File | Contents |
 |---|---|
-| `package.json` | `type: module`, `engines.node >= 22`, deps `semver@^7.6`, devDeps `esbuild@^0.16` (framework). Scripts: `build:fw`, `patch:fw`, `start`, `test`, `install-app`. |
+| `package.json` | `type: module`, `engines.node >= 22`, no dependencies (`semver` is vendored in `vendor/semver/`), devDeps `esbuild@^0.16` (framework). Scripts: `build:fw`, `patch:fw`, `start`, `test`, `install-app`. |
 | `bin/bncm-mac.mjs` | CLI subcommands: `launch [--daemon]`, `attach --port N`, `install-app`, `uninstall-app`, `doctor` (prints NCM version, ports, targets, data dir, plugin decisions), `reload`. |
 | `src/config.mjs` | datapath resolution (`BETTERNCM_PROFILE` or the default), directory bootstrap, `readConfig` / `writeConfig` (flat string map, atomic), mac config keys (`cdpPort`, `bypassCSP`, `channelShim`, `allowExec`, `allowFsOutsideData`, `autoForceUpdate`), `getNcmVersion()` (Info.plist), `NCM_APP` and `BUNDLE_ID` constants. |
 | `src/launcher.mjs` | `findNcm()` (pgrep + ps args → `{pid, port?}`), `pickPort()`, `quitNcm()` (osascript, poll), `launchNcm(port)` (`open -a … --args`), `waitForCdp(port)`, `confirmDialog(msg)`, `restart()` used by `app.restart`. |
@@ -395,7 +395,7 @@ Slug rule = C++ (keep `-` and non-ASCII). Log every decision.
 | `framework/` | Vendored FW@44b4df2 with `patches/js-framework-mac.patch` applied (F1–F13). Built to `dist/framework.js` and `dist/framework.css`. |
 | `scripts/vendor-framework.mjs` | Copies from the read-only clone, then `git apply patches/js-framework-mac.patch`. |
 | `resources/PluginMarket.plugin` | Copy of `bncm-v2/resource/PluginMarket.plugin` (0.8.0). |
-| `app-wrapper/Info.plist`, `app-wrapper/BetterNCM.sh` | Templates for `install-app`, which fills in the absolute paths to node and the project. |
+| `app-wrapper/Info.plist`, `app-wrapper/BetterNCM.sh` | Templates for `install-app`, which fills in the absolute paths to node (a stable Homebrew symlink when there is one) and the project. The script falls back to other Node 22+ installs (Homebrew, /usr/local, Volta, a login shell's PATH), shows a dialog when Node or the project is missing, then `exec`s the CLI so Apple Events stay attributed to BetterNCM.app. |
 | `test/fsapi.test.mjs` | Resolver cases: `./plugins_runtime`, `/plugins/X.plugin`, `/__TEST_SUCCEEDED__.txt`, `/Users/...`, `C:\x` (error). |
 | `test/plugins.test.mjs` | Extraction against copies of `eco/dl/{StyleSnippet,ZoomNCM,advanced-playbar,material-u-theme-ncmv3}.plugin`: filters and meta contents. |
 | `test/hijack.test.mjs` | Transform engine on `vendors~app~subApp.chunk.18d435e.js` with RNPN's `sagaEffects.put"),` action. |

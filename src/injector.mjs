@@ -4,11 +4,12 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
-  getDataPath, ensureDataDirs, readConfigKey, getMacConfig, isSafeMode, getNcmVersion, SAFE_MODE_KEY, MAC_VERSION,
+  getDataPath, ensureDataDirs, readConfigKey, writeConfigKey, getMacConfig, isSafeMode, getNcmVersion, SAFE_MODE_KEY,
+  MAC_VERSION, NCM_APP, ncmSupport, TESTED_NCM_LABEL,
 } from './config.mjs';
 import { log, setLogFile } from './log.mjs';
 import { connectBrowser } from './cdp.mjs';
-import { ensureNcm, findNcm, isPidAlive, restartNcm, waitForCdp } from './launcher.mjs';
+import { alertDialog, ensureNcm, findNcm, isPidAlive, restartNcm, waitForCdp } from './launcher.mjs';
 import { buildInjection } from './bundle.mjs';
 import { startServer } from './server.mjs';
 import { seedPluginMarket, extractPackedPlugins, collectHijacks, collectStartupScripts } from './plugins.mjs';
@@ -104,8 +105,9 @@ function injectionFingerprint() {
  * Runs until NCM exits (or a signal arrives).
  * mode 'launch': find or launch NCM with the CDP port (may ask to restart it).
  * mode 'attach': only attach to a running NCM on `port` (or the port it was started with).
+ * notify: show failures in a dialog too (the Dock/Finder wrapper, where nobody reads stderr).
  */
-export async function runInjector({ mode = 'launch', port = null } = {}) {
+export async function runInjector({ mode = 'launch', port = null, notify = false } = {}) {
   ensureDataDirs();
   setLogFile(path.join(getDataPath(), 'log/injector.log'));
   log(`betterncm-mac ${MAC_VERSION} starting (${mode}), data dir ${getDataPath()}, NCM ${getNcmVersion()}`);
@@ -332,6 +334,7 @@ export async function runInjector({ mode = 'launch', port = null } = {}) {
       return true;
     } catch (e) {
       log('relaunch with the debug port failed:', e);
+      if (notify && !e.alerted) await failureDialog('网易云音乐重新打开后没有加载 BetterNCM，自动重启也失败了。', e);
       return false;
     } finally {
       restarting = false;
@@ -387,6 +390,7 @@ export async function runInjector({ mode = 'launch', port = null } = {}) {
       saveState();
     } catch (e) {
       log('restart failed:', e);
+      if (notify && !e.alerted) await failureDialog('重启网易云音乐失败。', e);
     } finally {
       restarting = false;
     }
@@ -485,6 +489,7 @@ export async function runInjector({ mode = 'launch', port = null } = {}) {
     });
     log(`API server on http://127.0.0.1:${server.port}`);
 
+    if (mode === 'launch') await checkNcmApp(); // attach only needs the port
     const ncm = await ensureNcm({
       preferredPort: Number(readConfigKey('mac.cdpPort')) || 9222,
       launch: mode === 'launch',
@@ -501,7 +506,31 @@ export async function runInjector({ mode = 'launch', port = null } = {}) {
     watchDevPlugins();
   } catch (e) {
     log('startup failed:', e.message);
+    if (notify && !e.alerted && !e.userCancelled) await failureDialog('BetterNCM 启动失败。', e);
     await shutdown(1);
+  }
+
+  // Before NCM is touched: a missing or 2.x NCM cannot work; an untested 3.x gets one warning
+  // per version (the wrapper shows it; a terminal user sees the log line).
+  async function checkNcmApp() {
+    if (!fs.existsSync(path.join(NCM_APP, 'Contents/Info.plist'))) {
+      throw new Error(`找不到网易云音乐（${NCM_APP}）。请先安装网易云音乐；装在别处的话，在 config.json 里把 mac.ncmApp `
+        + '设为它的 .app 路径，例如 /Volumes/X/NeteaseMusic.app。');
+    }
+    const ver = getNcmVersion();
+    const support = ncmSupport(ver);
+    if (support === 'unsupported') {
+      throw new Error(`网易云音乐 ${ver} 不受支持：BetterNCM for Mac 只支持 3.x（NetEase Cloud Music ${ver} is not supported; 3.x only）。`);
+    }
+    if (support === 'untested') {
+      log(`NCM ${ver} is untested (tested: ${TESTED_NCM_LABEL}); injecting anyway`);
+      if (notify && readConfigKey('mac.warnedNcmVersion', '') !== ver) {
+        await alertDialog(`这个网易云音乐版本（${ver}）还没有测试过，BetterNCM 只在 ${TESTED_NCM_LABEL} 上测过。\n`
+          + '会照常加载；如果某个插件不正常，先在插件管理里关掉它。\n\n'
+          + `NetEase Cloud Music ${ver} is untested (tested: ${TESTED_NCM_LABEL}). BetterNCM loads anyway.`, { critical: false });
+        try { writeConfigKey('mac.warnedNcmVersion', ver); } catch (e) { log('cannot save mac.warnedNcmVersion:', e.message); }
+      }
+    }
   }
 
   const code = await finished;
@@ -509,6 +538,11 @@ export async function runInjector({ mode = 'launch', port = null } = {}) {
   process.off('SIGTERM', onSignal);
   process.off('SIGHUP', onSignal);
   return { code };
+}
+
+// `what` is the one-line Chinese summary; the error itself is usually English.
+async function failureDialog(what, e) {
+  await alertDialog(`${what}\n${e?.message ?? e}\n\n详细日志 / Log: ${path.join(getDataPath(), 'log/injector.log')}`);
 }
 
 export { SAFE_MODE_KEY };

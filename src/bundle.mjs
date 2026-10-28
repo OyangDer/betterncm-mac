@@ -8,6 +8,13 @@ import { log } from './log.mjs';
 // runs in the top frame right before the framework, in name order.
 const ORPHEUS_FRAMES = ['polyfills.js', 'native-shim.js', 'hijack-runtime.js', 'devtools-key.js'];
 const TOP_FRAME = ['channel-shim.js'];
+// Extras that change the look rather than fix something, each behind a config key that must be
+// 'true': Apple Music-style RefinedNowPlayingNext layout and cover motion, a still mini vinyl.
+const OPTIONAL_PRELUDE = {
+  'compat-rnp-layout.js': 'mac.rnpAppleStyle',
+  'compat-rnp-cover.js': 'mac.rnpAppleStyle',
+  'stop-mini-vinyl.js': 'mac.stopMiniVinyl',
+};
 
 const missingWarned = new Set();
 
@@ -102,6 +109,7 @@ export function buildInjection({ targetId, apiKey, apiPort, safe = false, cfg = 
     if (code != null) out.push(wrapPart('channel-shim.js', code));
   }
   for (const name of extras) {
+    if (OPTIONAL_PRELUDE[name] && cfg[OPTIONAL_PRELUDE[name]] !== 'true') continue;
     const code = prelude(name);
     if (code != null) out.push(wrapPart(name, code));
   }

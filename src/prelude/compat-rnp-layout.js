@@ -18,16 +18,19 @@
 //
 // The volume control stays where RNPN rendered it in the DOM (moving nodes RNPN owns would
 // fight its rendering); it is positioned against .mn, the column holding both the song info and
-// the controls, at the offsets measured from the more button.
+// the controls, at the offsets measured from the more button. An RNPN build without that button
+// keeps its own volume row.
 
 const STYLE_ID = 'bncm-compat-rnp-layout';
 const BTN_CLASS = 'bncm-vol-btn';
+const STOCK_VOLUME = 'bncm-vol-stock'; // on <body> when there is no more button to sit beside
 const SIZE = 30; // matches .rnp-info-more-button
 const GAP = 8;
 const OPEN_WIDTH = 170;
 const MN = '#rnp-view .g-single-track .g-singlec-ct .n-single .mn';
 const LYRIC_COLUMN_VW = 38;
 const BLOCK_SHIFT_VH = 3;
+const VOL = `body:not(.${STOCK_VOLUME}) #rnp-view .am-music-volume-controls`;
 
 const CSS = `
 #rnp-view { --rnp-v3-cover-width: clamp(240px, min(28vw, 50vh), 640px) !important; }
@@ -35,7 +38,7 @@ const CSS = `
 /* + 60px: .rnp-lyrics's own horizontal padding */
 #rnp-view .rnp-lyrics { max-width: calc(${LYRIC_COLUMN_VW}vw + 60px); }
 ${MN} { position: relative; }
-#rnp-view .am-music-volume-controls {
+${VOL} {
   position: absolute;
   top: var(--bncm-vol-top, 0px);
   right: var(--bncm-vol-right, ${SIZE + GAP}px);
@@ -47,12 +50,12 @@ ${MN} { position: relative; }
   color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.72);
   transition: width 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, color 0.2s ease;
 }
-#rnp-view .am-music-volume-controls:hover {
+${VOL}:hover {
   width: ${OPEN_WIDTH}px !important;
   background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.14);
   color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.96);
 }
-#rnp-view .${BTN_CLASS} {
+body:not(.${STOCK_VOLUME}) #rnp-view .${BTN_CLASS} {
   position: absolute;
   top: 0;
   right: 0;
@@ -63,8 +66,8 @@ ${MN} { position: relative; }
   justify-content: center;
   pointer-events: none;
 }
-#rnp-view .${BTN_CLASS} svg { width: 18px; height: 18px; display: block; }
-#rnp-view .am-music-volume-controls .rnp-amll-volume-slider {
+body:not(.${STOCK_VOLUME}) #rnp-view .${BTN_CLASS} svg { width: 18px; height: 18px; display: block; }
+${VOL} .rnp-amll-volume-slider {
   position: absolute;
   top: 0;
   left: 12px;
@@ -75,11 +78,11 @@ ${MN} { position: relative; }
   opacity: 0;
   transition: opacity 0.16s ease;
 }
-#rnp-view .am-music-volume-controls:hover .rnp-amll-volume-slider {
+${VOL}:hover .rnp-amll-volume-slider {
   opacity: 1;
   transition-delay: 0.08s;
 }
-#rnp-view .am-music-volume-controls .rnp-amll-volume-slider .appkit-now-playing-slider-icon {
+${VOL} .rnp-amll-volume-slider .appkit-now-playing-slider-icon {
   display: none;
 }
 `;
@@ -98,6 +101,9 @@ function attach() {
   const mn = document.querySelector(MN);
   const vol = mn && mn.querySelector('.am-music-volume-controls');
   const more = mn && mn.querySelector('.rnp-info-more-button');
+  // Only a rendered volume row without the button says this build lays out differently; either
+  // missing alone just means the lyric page has not been built yet.
+  if (vol) document.body.classList.toggle(STOCK_VOLUME, !more);
   if (!vol || !more) return;
   if (!vol.querySelector('.' + BTN_CLASS)) {
     const icon = vol.querySelector('.appkit-now-playing-slider-icon:last-child');

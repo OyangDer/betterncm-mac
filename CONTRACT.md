@@ -5,7 +5,7 @@ The design is in `DESIGN.md` (read sections 1–4 and 6). This file pins down th
 ## General rules
 
 - Node >= 22 (v24 is installed), ESM only (`.mjs`), no TypeScript.
-- Runtime dependencies: only `semver`. Use Node built-ins for everything else (`node:http`, `node:fs`, `node:child_process`, global `WebSocket` and `fetch`).
+- Runtime dependencies: only `semver`, vendored in `vendor/semver/` so a clone runs without `npm install`. Use Node built-ins for everything else (`node:http`, `node:fs`, `node:child_process`, global `WebSocket` and `fetch`).
 - Use `/usr/bin/unzip` to work with zip files.
 - Never modify `/Applications/NeteaseMusic.app`.
 - Log with `log(...)` from `src/log.mjs`.
@@ -20,8 +20,10 @@ export function setLogFile(path)
 ## src/config.mjs (owner: core)
 
 ```js
-export const NCM_APP = '/Applications/NeteaseMusic.app'
+export const NCM_APP                            // BNCM_NCM_APP || config mac.ncmApp || /Applications or ~/Applications/NeteaseMusic.app || Spotlight by bundle id; else /Applications/NeteaseMusic.app
 export const BUNDLE_ID = 'com.netease.163music'
+export const TESTED_NCM = '3.1.x'               // semver range; TESTED_NCM_LABEL = '3.1.14'
+export function ncmSupport(ver)                 // -> 'ok' | 'untested' (other 3.x: one warning dialog per version) | 'unsupported' (< 3: refused)
 export const BNCM_VERSION = '1.3.4'            // the version the framework reports
 export const MAC_VERSION = '0.1.0'             // betterncm-mac version
 export const PROJECT_ROOT                       // absolute path of the betterncm-mac/ dir (from import.meta.url)
@@ -29,7 +31,7 @@ export function getDataPath()                   // process.env.BETTERNCM_PROFILE
 export function ensureDataDirs()                // creates plugins/ plugins_runtime/ plugins_dev/ log/ run/
 export function readConfig()                    // -> object (flat string->string) from <datapath>/config.json, {} if missing
 export function readConfigKey(key, def)         // -> string
-export function writeConfigKey(key, value)      // atomic write (tmp + rename)
+export function writeConfigKey(key, value)      // atomic write (tmp + rename); a config.json that does not parse is copied to config.json.broken-<ms> first
 export function getNcmVersion()                 // reads CFBundleShortVersionString from NCM_APP Info.plist each call (via `defaults read` or plutil) -> '3.1.14'
 export function getNcmBuild()                   // CFBundleVersion -> '3459'
 ```
@@ -40,10 +42,14 @@ Mac-only config keys, with these defaults:
 |---|---|
 | `mac.cdpPort` | `'9222'` |
 | `mac.bypassCSP` | `'true'` |
-| `mac.channelShim` | `'false'` |
+| `mac.channelShim` | `'true'` |
 | `mac.allowExec` | `'false'` |
 | `mac.allowFsOutsideData` | `'false'` |
 | `mac.autoForceUpdate` | `'false'` |
+| `mac.rnpAppleStyle` | `'false'` (runs `compat-rnp-layout.js`, `compat-rnp-cover.js`) |
+| `mac.stopMiniVinyl` | `'false'` (runs `stop-mini-vinyl.js`) |
+
+Not in the defaults (so not in `__BNCM_CFG__`): `mac.ncmApp` (NCM bundle path) and `mac.warnedNcmVersion` (last untested version warned about).
 
 ## src/fsapi.mjs (owner: server)
 
@@ -132,6 +138,7 @@ CLI commands:
 | `attach [--port N]` | The same, but never launches or quits NCM. |
 | `doctor` | Prints NCM version, ports, targets, data dir and plugin decisions. |
 | `install-app` / `uninstall-app` | Install or remove the wrapper app. |
+| `uninstall [--purge]` | Stop the injector (SIGTERM), remove the wrapper, with `--purge` delete the data dir if it looks like ours. |
 | `reload` | Calls the running instance's API, using `run/state.json`, which holds the key. |
 
 Injector startup sequence:
