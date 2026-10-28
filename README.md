@@ -69,13 +69,14 @@ node bin/bncm-mac.mjs install-app --dock
 
 ## 耗电
 
-网易云本身播放时就要占约 20% CPU，所以在电池菜单里看到它是正常的。BetterNCM 的框架本身花费很小；最耗电的是 RefinedNowPlayingNext 打开时的逐字歌词动画。不看歌词时关掉歌词页，或者把网易云最小化，就能省下大部分。下面是作者在 3.1.14 上测的数，仅供参考：
+网易云本身播放时就要占约 20% CPU，所以在电池菜单里看到它是正常的。BetterNCM 的框架本身花费很小；最耗电的是 RefinedNowPlayingNext 打开时的逐字歌词动画。不看歌词时关掉歌词页，或者让网易云窗口被挡住、最小化，就能省下大部分：窗口不在画的时候，BetterNCM 会把给插件的播放进度从每秒 10 次降到 1 次，窗口一出现就恢复。下面是作者在 3.1.14 上测的数，仅供参考：
 
 | 状态 | 网易云进程 CPU |
 |---|---|
 | 原版，播放中 | 约 20% |
 | BetterNCM，关着歌词页 | 约 30% |
-| BetterNCM，开着 RefinedNowPlayingNext 歌词页 | 约 60% |
+| BetterNCM，开着 RefinedNowPlayingNext 歌词页 | 约 50–60% |
+| BetterNCM，歌词页开着但窗口被挡住、在其他桌面或最小化 | 约 3–6% |
 
 ## 出问题时
 

@@ -74,12 +74,47 @@ function __bncmInstallChannelShim() {
   // one. Plugins get at most one event per PROGRESS_INTERVAL_MS (the newest, delivered on a
   // trailing timer); a track change or a seek-like jump goes through at once. NCM's own
   // listeners are not affected.
+  //
+  // While the page is not drawn (window covered, on another Space, minimized) nothing the
+  // plugins compute per event can be seen, so they get one per HIDDEN_INTERVAL_MS (RNPN's lyric
+  // page kept NCM at ~18% CPU there). CEF on macOS reports a covered window as 'visible' but
+  // stops producing frames, so "drawn" means an animation frame requested at most every
+  // FRAME_PROBE_MS arrived within that time. The frame that comes when the window shows again
+  // delivers the newest event at once.
   const PROGRESS = 'audioplayer.onPlayProgress';
   const PROGRESS_INTERVAL_MS = 100;
+  const HIDDEN_INTERVAL_MS = 1000;
+  const FRAME_PROBE_MS = 500;
   let progressSentAt = -Infinity;
   let progressPending = null;
   let progressTimer = 0;
   let progressSeen = null; // { id, pos, at } of the newest event received
+  let probeAt = -Infinity;
+  let probePending = false;
+
+  function isDrawn(now) {
+    if (document.hidden) return false;
+    if (probePending) return now - probeAt < FRAME_PROBE_MS;
+    if (now - probeAt >= FRAME_PROBE_MS && typeof requestAnimationFrame === 'function') {
+      probePending = true;
+      probeAt = now;
+      requestAnimationFrame(() => {
+        probePending = false;
+        flushProgress();
+      });
+    }
+    return true;
+  }
+
+  function flushProgress() {
+    clearTimeout(progressTimer);
+    progressTimer = 0;
+    const pending = progressPending;
+    progressPending = null;
+    if (!pending) return;
+    progressSentAt = performance.now();
+    deliver(PROGRESS, pending);
+  }
 
   function isProgressJump(args, now) {
     const id = String(args[0]);
@@ -93,25 +128,13 @@ function __bncmInstallChannelShim() {
 
   function dispatchProgress(args) {
     const now = performance.now();
-    if (isProgressJump(args, now) || now - progressSentAt >= PROGRESS_INTERVAL_MS) {
-      clearTimeout(progressTimer);
-      progressTimer = 0;
-      progressPending = null;
-      progressSentAt = now;
-      deliver(PROGRESS, args);
+    const interval = isDrawn(now) ? PROGRESS_INTERVAL_MS : HIDDEN_INTERVAL_MS;
+    progressPending = args;
+    if (isProgressJump(args, now) || now - progressSentAt >= interval) {
+      flushProgress();
       return;
     }
-    progressPending = args;
-    if (!progressTimer) {
-      progressTimer = setTimeout(() => {
-        progressTimer = 0;
-        if (!progressPending) return;
-        const pending = progressPending;
-        progressPending = null;
-        progressSentAt = performance.now();
-        deliver(PROGRESS, pending);
-      }, Math.max(0, PROGRESS_INTERVAL_MS - (now - progressSentAt)));
-    }
+    if (!progressTimer) progressTimer = setTimeout(flushProgress, Math.max(0, interval - (now - progressSentAt)));
   }
 
   // macOS sends onPlayState as [id, "id|pause|RANDOM", 2]; plugins written for Windows take the
