@@ -89,7 +89,7 @@ export async function quitNcm({ timeout = 15000 } = {}) {
   if (r.code !== 0 && /-1743|not authori[sz]ed/i.test(r.stderr || '')) {
     await alertDialog(
       'BetterNCM 没有控制网易云音乐的权限，无法让它退出。\n'
-      + '请到“系统设置 → 隐私与安全性 → 自动化”，在 BetterNCM（或你用的终端）下面打开“网易云音乐”，然后重新打开 BetterNCM。\n\n'
+      + '请到“系统设置 → 隐私与安全性 → 自动化”，在 node、BetterNCM（或你用的终端）下面打开“网易云音乐”，然后重新打开 BetterNCM。\n\n'
       + 'BetterNCM is not allowed to control NetEase Cloud Music. Allow it in System Settings → Privacy & Security → Automation, then open BetterNCM again.',
     );
     throw shownError('not allowed to send Apple events to NCM (Automation permission)');
@@ -190,6 +190,25 @@ export async function ensureNcm({ preferredPort = 9222, launch = true, port = nu
   }
 
   return startFresh(port || preferredPort);
+}
+
+// For an NCM that was just opened without the port (from its own icon): for its first seconds it
+// ignores the AppleScript quit, and it has nothing to save yet, so it gets SIGTERM (never
+// SIGKILL). If that does not end it, the normal quit runs. Then relaunch with the port.
+export async function replaceFreshNcm(pid, port) {
+  log(`stopping the NCM that was opened without the debug port (pid ${pid})`);
+  try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ }
+  const deadline = Date.now() + 5000;
+  while (isPidAlive(pid) && Date.now() < deadline) await sleep(50);
+  if (isPidAlive(pid) || (await findNcm())) {
+    log('NCM did not stop on SIGTERM; asking it to quit');
+    if (!(await quitNcm())) throw new Error('NCM did not quit; not relaunching');
+  }
+  await sleep(300);
+  await launchNcm(port);
+  await verifyNcm(port, await waitForCdp(port));
+  const n = await waitForNcmPid();
+  return { pid: n?.pid ?? null, port, launched: true };
 }
 
 // Used by app.restart: graceful quit, then relaunch with the same port.

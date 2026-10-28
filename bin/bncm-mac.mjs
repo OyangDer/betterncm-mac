@@ -12,6 +12,7 @@ import {
 } from '../src/config.mjs';
 import { log, setQuiet } from '../src/log.mjs';
 import { alertDialogDetached } from '../src/dialog.mjs';
+import { pinToDock, unpinFromDock } from '../src/dock.mjs';
 
 const WRAPPER_ID = 'cc.microblock.betterncm-mac';
 const MIN_NODE = 22; // src/cdp.mjs uses the global WebSocket
@@ -29,8 +30,9 @@ Usage: bncm-mac <command> [options]
   attach [--port N]              attach to an NCM that already has a debug port; never launches or quits it
   doctor                         print versions, ports, targets, data dir and plugin decisions
   reload                         re-extract plugins in the running injector and reload the pages
-  install-app [--dest DIR]       write BetterNCM.app (default ~/Applications)
-  uninstall-app [--dest DIR]     remove BetterNCM.app
+  install-app [--dest DIR] [--dock]
+                                 write BetterNCM.app (default ~/Applications); --dock also pins it
+  uninstall-app [--dest DIR]     remove BetterNCM.app (and its Dock icon)
   uninstall [--purge] [--dest DIR]
                                  stop the injector and remove BetterNCM.app; --purge also deletes
                                  the data dir (plugins, settings, logs)
@@ -70,18 +72,27 @@ function portArg(v) {
 async function cmdRun(mode, values) {
   if (values.daemon) setQuiet(true);
   const { runInjector, liveState } = await import('../src/injector.mjs');
-  const { findNcm } = await import('../src/launcher.mjs');
+  const { findNcm, launchNcm } = await import('../src/launcher.mjs');
   const notify = !!values.daemon;
   let res = await runInjector({ mode, port: portArg(values.port), notify });
   if (res.alreadyRunning && mode === 'launch') {
     // Opening the wrapper twice should just bring NCM to the front, but only an NCM that has
     // the debug port: the other injector may be winding down (NCM quitting) or restarting it,
     // and `open -a` would start NCM without the port. Wait for it to finish instead.
+    // An injector whose NCM was just quit waits a while for NCM to come back (RELAUNCH_GRACE_MS)
+    // and does not start it itself, so start it with that injector's port; it attaches on its own.
     const deadline = Date.now() + 15000;
+    let started = false;
     for (;;) {
-      if ((await findNcm())?.port && liveState()) {
+      const ncm = await findNcm();
+      if (ncm?.port && liveState()) {
         try { execFileSync('/usr/bin/open', ['-a', NCM_APP]); } catch { /* ignore */ }
         return 0;
+      }
+      const st = liveState();
+      if (!ncm && st?.cdpPort && !started) {
+        started = true;
+        try { await launchNcm(st.cdpPort); } catch (e) { log('launching NCM for the running injector failed:', e.message); }
       }
       if (!liveState()) {
         res = await runInjector({ mode, port: portArg(values.port), notify });
@@ -292,6 +303,11 @@ function cmdInstallApp(values) {
   const script = tpl('BetterNCM.sh')
     .replaceAll('{{NODE}}', () => shellQuote(stableNodePath()))
     .replaceAll('{{CLI}}', () => shellQuote(path.join(PROJECT_ROOT, 'bin/bncm-mac.mjs')));
+  // Localized display name, so typing 网易云 in Spotlight or Launchpad finds the wrapper.
+  for (const lproj of ['zh-Hans.lproj', 'en.lproj']) {
+    fs.mkdirSync(path.join(contents, 'Resources', lproj), { recursive: true });
+    fs.copyFileSync(path.join(PROJECT_ROOT, 'app-wrapper', lproj, 'InfoPlist.strings'), path.join(contents, 'Resources', lproj, 'InfoPlist.strings'));
+  }
   const exe = path.join(contents, 'MacOS/BetterNCM');
   fs.writeFileSync(exe, script, { mode: 0o755 });
   fs.chmodSync(exe, 0o755);
@@ -308,6 +324,13 @@ function cmdInstallApp(values) {
   fs.utimesSync(app, now, now); // nudge LaunchServices to pick up the bundle
   console.log(`installed ${app}`);
   console.log(`node: ${stableNodePath()}`);
+  if (values.dock) {
+    try {
+      console.log(pinToDock(app) ? 'pinned to the Dock' : 'already in the Dock');
+    } catch (e) {
+      console.log(`could not pin it to the Dock (${e.message}); drag it there yourself`);
+    }
+  }
   console.log('Open BetterNCM.app instead of NetEase Cloud Music (keep it in the Dock).');
   console.log('If this folder moves, run install-app again from the new place.');
   console.log('');
@@ -321,12 +344,20 @@ function cmdUninstallApp(values) {
   const app = appPath(values);
   if (!fs.existsSync(app)) {
     console.log(`${app} is not installed`);
+    unpinQuietly(app); // a Dock tile can outlive a bundle moved to the Trash
     return 0;
   }
   if (bundleIdOf(app) !== WRAPPER_ID) fail(`${app} is not a BetterNCM wrapper; not removing it`);
   fs.rmSync(app, { recursive: true, force: true });
   console.log(`removed ${app}`);
+  unpinQuietly(app);
   return 0;
+}
+
+function unpinQuietly(app) {
+  try {
+    if (unpinFromDock(app)) console.log('removed it from the Dock');
+  } catch { /* a stale Dock icon is harmless */ }
 }
 
 async function cmdUninstall(values) {
@@ -342,11 +373,15 @@ async function cmdUninstall(values) {
   }
 
   const app = appPath(values);
-  if (!fs.existsSync(app)) console.log(`${app} is not installed`);
+  if (!fs.existsSync(app)) {
+    console.log(`${app} is not installed`);
+    unpinQuietly(app);
+  }
   else if (bundleIdOf(app) !== WRAPPER_ID) console.log(`${app} is not a BetterNCM wrapper; left alone`);
   else {
     fs.rmSync(app, { recursive: true, force: true });
     console.log(`removed ${app}`);
+    unpinQuietly(app);
   }
 
   if (values.purge) {
@@ -378,6 +413,7 @@ async function main() {
       port: { type: 'string' },
       dest: { type: 'string' },
       purge: { type: 'boolean' },
+      dock: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
     },

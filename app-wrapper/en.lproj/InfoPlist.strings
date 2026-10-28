@@ -1,0 +1,3 @@
+/* Shown in Finder, Spotlight, Launchpad and the Dock on an English system; matches what NCM itself is called there. */
+"CFBundleDisplayName" = "NetEaseMusic BetterNCM";
+"CFBundleName" = "NetEaseMusic BetterNCM";

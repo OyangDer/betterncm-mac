@@ -137,7 +137,7 @@ CLI commands:
 | `launch [--daemon]` | Finds or launches NCM with the CDP port, starts the server, attaches, injects, and stays running. |
 | `attach [--port N]` | The same, but never launches or quits NCM. |
 | `doctor` | Prints NCM version, ports, targets, data dir and plugin decisions. |
-| `install-app` / `uninstall-app` | Install or remove the wrapper app. |
+| `install-app [--dock]` / `uninstall-app` | Install or remove the wrapper app (localized name 网易云音乐 BetterNCM / NetEaseMusic BetterNCM); `--dock` pins it via `src/dock.mjs`, removal unpins it. |
 | `uninstall [--purge]` | Stop the injector (SIGTERM), remove the wrapper, with `--purge` delete the data dir if it looks like ours. |
 | `reload` | Calls the running instance's API, using `run/state.json`, which holds the key. |
 

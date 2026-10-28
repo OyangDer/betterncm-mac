@@ -17,15 +17,17 @@
 ```bash
 git clone https://github.com/OyangDer/betterncm-mac.git
 cd betterncm-mac
-node bin/bncm-mac.mjs install-app
+node bin/bncm-mac.mjs install-app --dock
 ```
 
-这会生成 `~/应用程序/BetterNCM.app`（也就是 `~/Applications/BetterNCM.app`）。以后**都从 BetterNCM.app 打开网易云**，可以把它拖到 Dock 上。
+这会生成 `~/Applications/BetterNCM.app`，`--dock` 会把它固定到 Dock（不想固定就去掉这个参数）。它用网易云的图标，在中文系统里显示为“网易云音乐 BetterNCM”，在英文系统里显示为“NetEaseMusic BetterNCM”，所以在聚焦搜索或启动台里，中文系统输入“网易云”、英文系统输入“netease”就能找到（输入“BetterNCM”两种系统都行）。
+
+以后**都从它打开网易云**。从网易云自己的图标打开的话，网易云启动时不带调试端口，插件加载不进去。如果 BetterNCM 还在后台（网易云退出后 20 秒内），它会在一两秒内把网易云换成带插件的；否则就是原版网易云。
 
 第一次打开时：
 
 1. 如果网易云已经开着，会问你要不要用 BetterNCM 重新打开它，点“重新打开”。
-2. macOS 可能会问“BetterNCM”想要控制“网易云音乐”，点“允许”。BetterNCM 需要这个权限来退出、重启网易云。
+2. macOS 可能会问是否允许“node”（BetterNCM 的后台程序）控制“网易云音乐”，点“允许”。BetterNCM 需要这个权限来退出、重启网易云。
 3. 网易云打开后，右上角设置按钮旁边会多出一个 BetterNCM 按钮，里面有插件管理和插件市场。
 
 项目文件夹挪了位置，或者 Node 换了安装方式，在新位置重新运行一次 `install-app` 就行。
@@ -78,7 +80,7 @@ node bin/bncm-mac.mjs install-app
 - 运行 `node bin/bncm-mac.mjs doctor`，最后几行会用 OK / WARN / FAIL 列出 Node、网易云、BetterNCM.app 的状态。
 - 日志在 `~/Library/Application Support/BetterNCM-mac/log/injector.log`。
 - 从 BetterNCM.app 启动失败时会弹窗说明原因。
-- 一直提示“没有控制网易云音乐的权限”：到“系统设置 → 隐私与安全性 → 自动化”，打开 BetterNCM 下面的“网易云音乐”。
+- 一直提示“没有控制网易云音乐的权限”：到“系统设置 → 隐私与安全性 → 自动化”，在“node”（或“BetterNCM”）下面打开“网易云音乐”。
 - 网易云自动更新到没测过的版本时，会提示一次，然后照常加载。哪个插件不正常，就先在插件管理里关掉它。
 
 ## 安全提示
@@ -88,13 +90,13 @@ node bin/bncm-mac.mjs install-app
 ## 卸载
 
 ```bash
-node bin/bncm-mac.mjs uninstall          # 停止 BetterNCM，删掉 BetterNCM.app，保留插件和设置
+node bin/bncm-mac.mjs uninstall          # 停止 BetterNCM，删掉 BetterNCM.app 和它的 Dock 图标，保留插件和设置
 node bin/bncm-mac.mjs uninstall --purge  # 同时删掉插件、设置和日志
 ```
 
 卸载后退出网易云，再从它自己的图标打开，就是原版。项目文件夹可以直接删掉。
 
-不卸载、只是想临时用一次原版：退出网易云后**等 20 秒**再从它自己的图标打开。BetterNCM 会在网易云退出后等它 20 秒（为了网易云自己重启时能接上），这段时间内重新打开的网易云会被它重新接管。
+不卸载、只是想临时用一次原版：退出网易云后**等 20 秒**再从它自己的图标打开。BetterNCM 会在网易云退出后等它 20 秒（为了网易云自己重启时能接上），这段时间内重新打开的网易云会被它换成带插件的。
 
 ## 命令
 
@@ -103,7 +105,8 @@ node bin/bncm-mac.mjs launch [--daemon] [--port N]   启动（或找到）网易
 node bin/bncm-mac.mjs attach [--port N]              只连接已经带调试端口的网易云，不会启动或退出它
 node bin/bncm-mac.mjs doctor                         检查环境
 node bin/bncm-mac.mjs reload                         重新解压插件并刷新页面
-node bin/bncm-mac.mjs install-app | uninstall-app    生成 / 删除 BetterNCM.app
+node bin/bncm-mac.mjs install-app [--dock]          生成 BetterNCM.app（--dock 同时固定到 Dock）
+node bin/bncm-mac.mjs uninstall-app                  删除 BetterNCM.app 和它的 Dock 图标
 node bin/bncm-mac.mjs uninstall [--purge]            卸载
 ```
 

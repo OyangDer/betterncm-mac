@@ -9,7 +9,7 @@ import {
 } from './config.mjs';
 import { log, setLogFile } from './log.mjs';
 import { connectBrowser } from './cdp.mjs';
-import { alertDialog, ensureNcm, findNcm, isPidAlive, restartNcm, waitForCdp } from './launcher.mjs';
+import { alertDialog, ensureNcm, findNcm, isPidAlive, replaceFreshNcm, restartNcm, waitForCdp } from './launcher.mjs';
 import { buildInjection } from './bundle.mjs';
 import { startServer } from './server.mjs';
 import { seedPluginMarket, extractPackedPlugins, collectHijacks, collectStartupScripts } from './plugins.mjs';
@@ -292,7 +292,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
           await shutdown(0);
           return;
         }
-        if (await relaunchWithPort()) return;
+        if (await relaunchWithPort(ncm.pid)) return;
         await shutdown(1);
         return;
       }
@@ -312,7 +312,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
   async function waitForNcmReturn(ms) {
     const deadline = Date.now() + ms;
     while (!shuttingDown && Date.now() < deadline) {
-      await sleep(500);
+      await sleep(200); // the sooner a portless NCM is caught, the less of it the user sees
       const ncm = await findNcm();
       if (ncm) return ncm;
     }
@@ -321,12 +321,11 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
 
   // In launch mode the user started NCM through BetterNCM, so an NCM that came back without the
   // debug port is put back the way they launched it.
-  async function relaunchWithPort() {
+  async function relaunchWithPort(pid) {
     log('NCM is running without the debug port; relaunching it with BetterNCM');
     restarting = true;
     try {
-      await sleep(3000); // a just-started NCM ignores the AppleScript quit
-      const r = await restartNcm(cdpPort);
+      const r = await replaceFreshNcm(pid, cdpPort);
       ncmPid = r.pid;
       cdpPort = r.port;
       await attachBrowser();

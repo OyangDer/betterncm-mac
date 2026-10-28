@@ -44,7 +44,10 @@ The BetterNCM folder was moved or deleted. Run install-app again from where it i
   exit 1
 fi
 
-# The injector logs to $DATA/log/injector.log itself; this file only catches crashes. exec keeps
-# the injector in this app's process, so macOS attributes its Apple Events (quitting NCM) to
-# BetterNCM.app for the Automation permission.
-exec "$NODE" "$CLI" launch --daemon >> "$DATA/log/wrapper.log" 2>&1
+# The injector logs to $DATA/log/injector.log itself; this file only catches crashes. It runs
+# detached so this app exits at once: every click on BetterNCM.app then starts a new, short-lived
+# launch, which brings NCM to the front or, when the running injector is waiting for a quit NCM
+# to come back, starts NCM for it. (An exec'd injector would be this app's process, and macOS
+# only activates a running app on a click.) Either way the responsible process for the Automation
+# permission is node itself, so detaching changes nothing there.
+nohup "$NODE" "$CLI" launch --daemon >> "$DATA/log/wrapper.log" 2>&1 &
