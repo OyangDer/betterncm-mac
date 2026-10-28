@@ -1,7 +1,8 @@
 // Layout tweaks for RefinedNowPlayingNext's built-in player controls.
 //
 // The full-width volume slider row under the transport buttons becomes a small speaker button
-// beside the song info's "···" (more) button, drawn in the same style. Hovering it widens it to
+// beside the song info's "···" (more) button, drawn in the same style: both are bare icons that
+// get a light tint under the pointer. Hovering it widens it to
 // the left into a pill holding the slider, with the speaker staying put at the right end. Taking
 // the row out of the flow also lets the bottom-aligned cover and controls block sit lower.
 //
@@ -46,10 +47,16 @@ ${VOL} {
   height: ${SIZE}px;
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.08);
+  background: transparent;
   color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.72);
   transition: width 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, color 0.2s ease;
 }
+/* Plain icons like the rest of the page; a tint only under the pointer. */
+#rnp-view .rnp-info-more-button {
+  background: transparent !important;
+  transition: background-color 0.2s ease;
+}
+#rnp-view .rnp-info-more-button:hover { background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.1) !important; }
 ${VOL}:hover {
   width: ${OPEN_WIDTH}px !important;
   background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.14);
@@ -116,8 +123,9 @@ function attach() {
   const m = mn.getBoundingClientRect();
   const b = more.getBoundingClientRect();
   if (!m.width || !b.width) return;
-  vol.style.setProperty('--bncm-vol-top', Math.round(b.top - m.top) + 'px');
-  vol.style.setProperty('--bncm-vol-right', Math.round(m.right - b.left + GAP) + 'px');
+  // Unrounded, so it lines up with the more button to the pixel.
+  vol.style.setProperty('--bncm-vol-top', (b.top - m.top) + 'px');
+  vol.style.setProperty('--bncm-vol-right', (m.right - b.left + GAP) + 'px');
 }
 
 function start() {

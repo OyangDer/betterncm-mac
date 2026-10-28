@@ -34,7 +34,7 @@ node bin/bncm-mac.mjs install-app --dock
 
 ## 插件
 
-在插件市场里安装。推荐 **RefinedNowPlayingNext**，它把正在播放页换成了更好看的歌词页。网易云自己打开的正在播放页（比如进入“漫游”时）也会换成它。
+在插件市场里安装。推荐 **RefinedNowPlayingNext**，它把正在播放页换成了更好看的歌词页。网易云自己打开的正在播放页（比如进入“漫游”时）也会换成它；漫游时它的控制栏里会出现“减少推荐”按钮，替代用不上的播放列表按钮。
 
 带原生（Windows DLL）部分的插件在 Mac 上用不了，例如 InfLink-rs（Windows 系统媒体控制）。插件市场默认从 GitHub 下载；连不上 GitHub 时，会自动改从 jsDelivr 镜像下载。
 
