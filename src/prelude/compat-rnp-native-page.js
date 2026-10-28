@@ -9,12 +9,21 @@
 // capture listener takes and keeps from NCM), and the stock page is closed with its own collapse
 // button so it does not keep rendering underneath. Newer RNPN builds (not 3.0.2) let a
 // shift-click on the cover through to NCM on purpose; that one is left alone.
+//
+// The clicks carry a real point, the target's center. RNPN's capture listener swallows any click
+// whose point lies in the play bar (<footer>) as a click on the bar, and while RNPN's page is
+// open its CSS moves the bar above the window (`bottom: 100%`), so a synthetic click's default
+// point, (0, 0), lies on the bar's lower edge: RNPN would swallow every collapse click until NCM
+// shrinks the bar to no height, 1.5s or more into its page.
 
 const CONTAINER = '#vinyl-page-container';
 const COLLAPSE = '[data-testid="tid_vinyl_unfold_btn"], .close button';
 const PAGE_OPEN = 'rnp-lyric-page-open';
 const BIND_CHECK_MS = 2000; // re-find the container, re-check its state
-const COLLAPSE_RETRY_MS = 250; // NCM ignores the collapse button while the page is still opening
+const COLLAPSE_RETRY_MS = 250; // while the collapse button is not rendered
+// After a click: NCM ignores the button while its page is still sliding in (~450ms), and its
+// closing animation takes about as long.
+const COLLAPSE_WAIT_MS = 700;
 const COLLAPSE_TRIES = 10;
 
 let bound = null;
@@ -25,7 +34,17 @@ let shiftOpen = false;
 
 const rnpLoaded = () => !!window.loadedPlugins?.RefinedNowPlayingNext;
 const isShown = (el) => getComputedStyle(el).display !== 'none';
-const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+
+function click(el) {
+  const r = el.getBoundingClientRect();
+  const point = r.width || r.height
+    ? { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }
+    : { clientX: innerWidth / 2, clientY: innerHeight / 2 }; // not laid out: anywhere off the bar
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, ...point }));
+}
+
+// The next frame, or at once where there are no frames to wait for (tests).
+const onFrame = (fn) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(fn) : fn());
 
 // Opacity as well as visibility: the record's cover image sets `visibility: visible` on itself,
 // which overrides a hidden parent, and showed as a record flying in.
@@ -65,8 +84,8 @@ function onStyleChange() {
     stuck = false;
     return;
   }
-  // A hidden window paints nothing, and NCM's collapse button does nothing while its animations
-  // are paused there; this runs again when the window shows.
+  // NCM hides the page only at the end of its closing animation, and a hidden window plays no
+  // animations; this runs again when the window shows.
   if (stuck || shiftOpen || document.hidden || !rnpLoaded()) return;
   replacing = true;
   hide(el);
@@ -75,14 +94,16 @@ function onStyleChange() {
   } catch (e) {
     console.warn('[BetterNCM] could not open RNPN for the stock now-playing page', e);
   }
-  // Collapse until NCM has hidden it, then unhide it for its next opening. A page that will
-  // not close is shown again rather than left invisible over everything.
+  // Collapse until NCM has hidden it, then unhide it for its next opening. Each check waits for
+  // a frame, so the time a covered window spends undrawn (playing no closing animation) does not
+  // count against the page. A page that will not close is shown again rather than left
+  // invisible over everything.
   let tries = 0;
   const collapse = () => {
     if (isShown(el) && tries++ < COLLAPSE_TRIES) {
       const button = el.querySelector(COLLAPSE);
       if (button) click(button);
-      setTimeout(collapse, COLLAPSE_RETRY_MS);
+      setTimeout(() => onFrame(collapse), button ? COLLAPSE_WAIT_MS : COLLAPSE_RETRY_MS);
       return;
     }
     stuck = isShown(el);

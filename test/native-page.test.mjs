@@ -9,17 +9,22 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CODE = fs.readFileSync(path.join(ROOT, 'src/prelude/compat-rnp-native-page.js'), 'utf8');
+const BUTTON_RECT = { left: 40, top: 33, width: 40, height: 40 };
 
-function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0 } = {}) {
+function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0, frames = false, buttonRect = BUTTON_RECT } = {}) {
   const log = [];
   const timers = [];
+  const frameQueue = [];
+  const clicks = [];
   let observerCb = null;
   let onVisible = null;
   const bodyClasses = new Set(rnpOpen ? ['rnp-lyric-page-open'] : []);
   const styleProps = {};
   let collapseClicks = 0;
   const collapse = {
-    dispatchEvent: () => {
+    getBoundingClientRect: () => buttonRect,
+    dispatchEvent: (e) => {
+      clicks.push(e);
       collapseClicks++;
       log.push('collapse');
       if (collapseClicks > collapseWorksAfter) page.display = 'none';
@@ -30,11 +35,17 @@ function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0 } = {}) {
     style: { setProperty: (k, v) => { styleProps[k] = v; }, removeProperty: (k) => { delete styleProps[k]; } },
     querySelector: () => collapse,
   };
-  const cover = { dispatchEvent: () => { log.push('open-rnp'); bodyClasses.add('rnp-lyric-page-open'); } };
+  const cover = {
+    getBoundingClientRect: () => ({ left: 20, top: 840, width: 60, height: 60 }),
+    dispatchEvent: () => { log.push('open-rnp'); bodyClasses.add('rnp-lyric-page-open'); },
+  };
   const ctx = {
     loadedPlugins: rnp ? { RefinedNowPlayingNext: {} } : {},
     getComputedStyle: () => ({ display: page.display }),
-    MouseEvent: class { constructor(type) { this.type = type; } },
+    MouseEvent: class { constructor(type, init = {}) { this.type = type; this.clientX = init.clientX ?? 0; this.clientY = init.clientY ?? 0; } },
+    innerWidth: 1470,
+    innerHeight: 923,
+    ...(frames ? { requestAnimationFrame: (fn) => { frameQueue.push(fn); } } : {}),
     MutationObserver: class { constructor(cb) { observerCb = cb; } observe() {} disconnect() {} },
     setTimeout: (fn) => { timers.push(fn); },
     setInterval: () => {},
@@ -51,7 +62,8 @@ function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0 } = {}) {
   const open = () => { page.display = 'block'; observerCb?.(); };
   const flush = () => { for (let i = 0; i < 50 && timers.length; i++) timers.shift()(); };
   const setHidden = (h) => { ctx.document.hidden = h; if (!h) onVisible?.(); };
-  return { log, open, flush, styleProps, page, setHidden };
+  const frame = () => { const q = frameQueue.splice(0); q.forEach((fn) => fn()); };
+  return { log, open, flush, frame, clicks, styleProps, page, setHidden };
 }
 
 test('the stock page opening is replaced by RNPN and collapsed', () => {
@@ -119,4 +131,33 @@ test('a page given up on is retried when the window shows again', () => {
   p.setHidden(false);
   p.flush();
   assert.equal(p.page.display, 'none');
+});
+
+test('clicks carry the button\'s center, not (0, 0), which RNPN takes for its moved play bar', () => {
+  const p = load();
+  p.open();
+  p.flush();
+  assert.deepEqual(p.clicks.map((e) => [e.clientX, e.clientY]), [[60, 53]]);
+  const q = load({ buttonRect: { left: 0, top: 0, width: 0, height: 0 } });
+  q.open();
+  q.flush();
+  assert.deepEqual(q.clicks.map((e) => [e.clientX, e.clientY]), [[735, 461.5]], 'not laid out: the window\'s center');
+});
+
+test('retries wait for frames, so an undrawn window does not use them up', () => {
+  const p = load({ frames: true, collapseWorksAfter: 1 });
+  p.open();
+  p.flush();
+  assert.equal(p.clicks.length, 1);
+  for (let i = 0; i < 20; i++) p.flush(); // timers keep running, but no frame comes
+  assert.equal(p.clicks.length, 1);
+  assert.equal(p.page.display, 'block');
+  assert.equal(p.styleProps.visibility, 'hidden', 'still hidden, not given up on');
+  p.frame();
+  assert.equal(p.clicks.length, 2);
+  assert.equal(p.page.display, 'none');
+  p.flush();
+  p.frame();
+  assert.equal(p.styleProps.visibility, undefined, 'unhidden once closed');
+  assert.ok(!p.log.includes('warn'));
 });
