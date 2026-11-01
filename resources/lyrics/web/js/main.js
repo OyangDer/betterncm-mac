@@ -74,7 +74,8 @@ on('mode', (m) => set('mode', m.v));
 on('volume', (m) => set('volume', Number(m.v)));
 on('roaming', (m) => { set('roaming', !!m.v); if (m.icon) set('dislikeIcon', m.icon); });
 on('hello', () => send('snapshot'));
-on('open', (m) => { if (m.version) set('version', m.version); set('view', state.view || 'lyrics'); });
+// every open starts on the lyrics, whatever view the window was left in
+on('open', (m) => { if (m.version) set('version', m.version); set('view', 'lyrics'); });
 on('host.window', (m) => {
   const was = state.window.visible;
   set('window', { w: m.w, h: m.h, visible: !!m.visible, fullscreen: !!m.fullscreen });

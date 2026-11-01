@@ -8,10 +8,10 @@
   --c5: rgba(var(--fg), .6); --c6: rgba(var(--fg), .5); --c7: rgba(var(--fg), .4); --c8: rgba(var(--fg), .3);
   --c9: rgba(var(--fg), .25); --c10: rgba(var(--fg), .1); --c11: rgba(var(--fg), .06); --c12: rgba(var(--fg), .03);
   --liked: rgb(255, 58, 58);
-  position: fixed;
+  position: absolute; /* in RNPN's .wrap, which covers the window */
   left: var(--bncm-panel-left); top: var(--bncm-panel-top);
   width: var(--bncm-panel-width); height: var(--bncm-panel-height);
-  z-index: 999; /* above RNPN's #rnp-view (998), below its tool row's menus */
+  z-index: 5; /* above the lyric column and the cover side; the top bar and menus stay above */
   opacity: 0; visibility: hidden; pointer-events: none;
   transform: translateY(12px);
   font-family: inherit; color: var(--c2);
@@ -25,6 +25,8 @@ body:not([data-bncm-view="lyrics"]) #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyr
   opacity: 0; visibility: hidden; transition: opacity .24s ease, visibility 0s linear .24s;
 }
 body[data-bncm-view="lyrics"] #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-switch, .rnp-lyrics-scrollbar) { transition: opacity .24s ease; }
+/* While the window is closed the panel waits with the lyric column (app.css, RNPN's entrance). */
+body.bncm-closed .bncm-panel-host.shown { opacity: 0; transition: none; }
 /* The settings popover covers the panel. */
 body.bncm-settings-open .bncm-panel-host { visibility: hidden; }
 

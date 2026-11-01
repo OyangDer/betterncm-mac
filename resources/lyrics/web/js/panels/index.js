@@ -28,24 +28,27 @@ function ensureHost() {
   if (host) return host;
   host = document.createElement('div');
   host.className = 'bncm-panel-host';
-  // on <body>: inside RNPN's .lyric (will-change: transform) a fixed box would be placed relative to it
-  document.body.append(host);
+  // In RNPN's .wrap, beside the lyric column: it rises with the page on open, and a box inside .lyric
+  // would be moved by the column's own entrance and would clip at its edges.
+  document.querySelector('#rnp-view .wrap').append(host);
   return host;
 }
 
-/** The lyric column's box minus RNPN's 30px padding, below the top-right controls (as compat-rnp-panels.js). */
+/** The lyric column's box minus RNPN's 30px padding, below the top-right controls (as compat-rnp-panels.js).
+ * Layout offsets, not client rects: those include the entrance transforms while the window opens. */
 export function placeHost() {
   if (!host) return;
   const lyrics = document.querySelector('#rnp-view .rnp-lyrics');
   const col = document.querySelector('#rnp-view .lyric');
-  if (!lyrics || !col) return;
-  const r = lyrics.getBoundingClientRect();
+  if (!lyrics || !col || col.offsetParent !== host.parentElement) return;
+  const left = col.offsetLeft + lyrics.offsetLeft;
+  const top = col.offsetTop + lyrics.offsetTop;
   const TOP_CLEAR = 56;
-  const top = Math.max(r.top, TOP_CLEAR);
-  host.style.setProperty('--bncm-panel-left', `${r.left + 30}px`);
-  host.style.setProperty('--bncm-panel-top', `${top}px`);
-  host.style.setProperty('--bncm-panel-width', `${Math.max(0, r.width - 60)}px`);
-  host.style.setProperty('--bncm-panel-height', `${Math.max(0, r.bottom - top)}px`);
+  const clear = Math.max(top, TOP_CLEAR);
+  host.style.setProperty('--bncm-panel-left', `${left + 30}px`);
+  host.style.setProperty('--bncm-panel-top', `${clear}px`);
+  host.style.setProperty('--bncm-panel-width', `${Math.max(0, lyrics.offsetWidth - 60)}px`);
+  host.style.setProperty('--bncm-panel-height', `${Math.max(0, top + lyrics.offsetHeight - clear)}px`);
 }
 
 export async function showView(view) {
