@@ -1,0 +1,5 @@
+{
+  "id": "9003",
+  "source": "harness-synthetic",
+  "note": "yrc times are offset from the LRC, so alignment uses closest mode; Latin punctuation; long gap interlude; trailing words"
+}

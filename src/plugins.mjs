@@ -134,6 +134,7 @@ function ncmMajor(ver) {
 // Returns null when the plugin should be extracted, else the skip reason.
 function filterReason(m, slug, ncmVer, disabled) {
   if (disabled.includes(slug)) return 'in disable_list.txt';
+  if (m.name === 'RefinedNowPlayingNext' && readConfigKey('mac.lyricsWindow') === 'true') return 'replaced by the lyrics window (mac.lyricsWindow)';
   if (ncmMajor(ncmVer) === 3 && m['ncm3-compatible'] !== true) return 'not ncm3-compatible';
   const req = m['ncm-version-req'] ?? DEFAULT_NCM_REQ;
   if (typeof req !== 'string') return 'invalid ncm-version-req';

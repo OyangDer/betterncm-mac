@@ -1,0 +1,5 @@
+{
+  "id": "9103",
+  "source": "harness-synthetic",
+  "note": "yrc words: multi-space split, 999/1000 ms trailing, punctuation-only words, kana, unsorted lines, \"(\" in a word, space restoration from LRC, Latin punctuation mapping, 4999/5000 interludes"
+}

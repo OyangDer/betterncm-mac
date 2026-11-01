@@ -147,6 +147,7 @@ function __bncmInstallChannelShim() {
   const NCM_PROGRESS_MS = 250;
   const NCM_COVERED_MS = 1000;
   const RNP_PAGE_OPEN = 'rnp-lyric-page-open';
+  const LYRICS_WINDOW_OPEN = 'bncm-lyrics-open'; // the lyrics window covers NCM's (lyrics-bridge.js)
   const throttledNcm = new WeakSet();
 
   function throttleNcmProgress(s) {
@@ -173,7 +174,8 @@ function __bncmInstallChannelShim() {
       const jump = !seen || seen.id !== id || !Number.isFinite(pos) || !Number.isFinite(seen.pos)
         || pos < seen.pos - 0.25 || pos > seen.pos + (now - seen.at) / 1000 + 0.75;
       seen = { id, pos, at: now };
-      const covered = document.body?.classList.contains(RNP_PAGE_OPEN) || !isDrawn(now);
+      const cl = document.body?.classList;
+      const covered = cl?.contains(RNP_PAGE_OPEN) || cl?.contains(LYRICS_WINDOW_OPEN) || !isDrawn(now);
       const interval = covered ? NCM_COVERED_MS : NCM_PROGRESS_MS;
       pending = args;
       if (jump || now - sentAt >= interval) {
@@ -191,7 +193,15 @@ function __bncmInstallChannelShim() {
   const PLAY_STATE = 'audioplayer.onPlayState';
   const PLAY_STATE_ARG = /^([^|]*\|(?:pause|resume|play|stop))\|[^|]*$/;
 
+  // Raw, unthrottled events for BetterNCM's own preludes (the lyrics window's bridge keeps its
+  // own pace): window.__bncmChannelTap((command, args) => ...).
+  const taps = [];
+  window.__bncmChannelTap = (fn) => { if (typeof fn === 'function') taps.push(fn); };
+
   function dispatch(command, args) {
+    for (const t of taps) {
+      try { t(command, args); } catch (e) { console.error('[BetterNCM] channel tap failed', e); }
+    }
     if (command === PROGRESS) {
       dispatchProgress(args);
       return;

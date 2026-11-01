@@ -509,6 +509,24 @@ export async function startServer({ apiKey, hooks = {} }) {
       hooks.onHijackReport?.(req.headers['x-bncm-target'] ?? '', ids);
       send(res, 200);
     },
+    // Development: run JS in the lyrics window's page and return its value (LYRICS-WINDOW.md).
+    '/internal/lyrics_eval': async (_q, req, res) => {
+      const js = (await readBody(req, 1024 * 1024)).toString('utf8');
+      if (!hooks.onLyricsEval) { send(res, 404); return; }
+      try {
+        sendJson(res, { value: await hooks.onLyricsEval(js) });
+      } catch (e) {
+        send(res, 500, String(e?.message ?? e));
+      }
+    },
+    '/internal/lyrics_snapshot': async (q, _req, res) => {
+      if (!hooks.onLyricsSnapshot) { send(res, 404); return; }
+      try {
+        sendJson(res, { value: await hooks.onLyricsSnapshot(q.get('path') ?? '') });
+      } catch (e) {
+        send(res, 500, String(e?.message ?? e));
+      }
+    },
     '/internal/devtools': async (q, req, res) => {
       let target = req.headers['x-bncm-target'] ?? q.get('target') ?? '';
       const raw = (await readBody(req, 64 * 1024)).toString('utf8');

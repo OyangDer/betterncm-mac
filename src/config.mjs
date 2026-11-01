@@ -39,6 +39,9 @@ export const MAC_DEFAULTS = Object.freeze({
   'mac.rnpAppleStyle': 'true',
   'mac.stopMiniVinyl': 'false',
   'mac.rnpAutoLyricSize': 'true',
+  // The lyric page in its own window (LYRICS-WINDOW.md) instead of RefinedNowPlayingNext, which
+  // is then not loaded; 'false' brings RefinedNowPlayingNext and its compat-rnp-* preludes back.
+  'mac.lyricsWindow': 'true',
   // BetterNCM's plugin manager and plugin market. Most market plugins do not work on macOS
   // (Windows DLLs and programs, NCM 2 pages), and RefinedNowPlayingNext comes bundled, so the
   // manager's button is hidden and the market not loaded unless this is 'true'.

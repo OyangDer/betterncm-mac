@@ -195,6 +195,7 @@ test('look-and-feel preludes only run when their config key is true', () => {
     'compat-rnp-lyric-switch.js': `window.__order.push('lyricswitch');`,
     'stop-mini-vinyl.js': `window.__order.push('vinyl');`,
     'compat-rnp-lyric-size.js': `window.__order.push('lyricsize');`,
+    'lyrics-bridge.js': `window.__order.push('lyricsbridge');`,
     'hide-plugin-manager.js': `window.__order.push('hidepm');`,
   };
   for (const [f, code] of Object.entries(optional)) fs.writeFileSync(path.join(root, 'src/prelude', f), code);
@@ -209,6 +210,11 @@ test('look-and-feel preludes only run when their config key is true', () => {
     // "!key": runs unless the key is 'true'.
     assert.ok(off.includes('hidepm'), 'hide-plugin-manager runs by default');
     assert.ok(!order({ 'mac.pluginManager': 'true' }).includes('hidepm'));
+    // The lyrics window replaces RefinedNowPlayingNext: its bridge comes in, every compat-rnp-* goes.
+    assert.ok(!off.includes('lyricsbridge'));
+    const lw = order({ 'mac.lyricsWindow': 'true', 'mac.rnpAppleStyle': 'true', 'mac.rnpAutoLyricSize': 'true' });
+    assert.ok(lw.includes('lyricsbridge'));
+    for (const n of ['layout', 'cover', 'top', 'menustyle', 'panels', 'lyricswitch', 'lyricsize']) assert.ok(!lw.includes(n), `${n} ran with the lyrics window on`);
   } finally {
     for (const f of Object.keys(optional)) fs.rmSync(path.join(root, 'src/prelude', f), { force: true });
   }

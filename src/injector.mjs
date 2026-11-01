@@ -14,6 +14,7 @@ import { buildInjection } from './bundle.mjs';
 import { startServer } from './server.mjs';
 import { seedBundledPlugins, seedPluginMarket, extractPackedPlugins, collectHijacks, collectStartupScripts } from './plugins.mjs';
 import { openDevtools } from './macos.mjs';
+import { createLyricsRelay, lyricsWindowEnabled } from './lyrics-window.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SETUP_TIMEOUT = 10000;
@@ -145,6 +146,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
   let server = null;
   let finish;
   const finished = new Promise((r) => { finish = r; });
+  const lyrics = createLyricsRelay({ getCdp: () => cdp });
 
   function injectionInputs() {
     const safe = isSafeMode();
@@ -183,6 +185,8 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
     try {
       await cdp.send('Page.enable', {}, sessionId, opt);
       await cdp.send('Runtime.enable', {}, sessionId, opt);
+      // before the page runs again, so the lyrics bridge finds its binding at document start
+      if (lyricsWindowEnabled()) await lyrics.attachSession(sessionId).catch((e) => log('lyrics binding failed:', e.message));
       await cdp.send('Page.setBypassCSP', { enabled: readConfigKey('mac.bypassCSP') !== 'false' }, sessionId, opt);
       await registerScript(sessionId, injectionInputs());
       log(`injection registered for ${targetId} (${url || 'new target'})`);
@@ -237,7 +241,8 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
   async function attachBrowser() {
     cdp = await connectBrowser(cdpPort);
     cdp.on('Target.attachedToTarget', (p) => { onAttached(p).catch((e) => log('attach handler:', e)); });
-    cdp.on('Target.detachedFromTarget', (p) => { sessions.delete(p.sessionId); });
+    cdp.on('Target.detachedFromTarget', (p) => { sessions.delete(p.sessionId); lyrics.detachSession(p.sessionId); });
+    cdp.on('Runtime.bindingCalled', (p, sid) => lyrics.onBindingCalled(p, sid));
     cdp.on('Target.targetDestroyed', (p) => dropTarget(p.targetId));
     cdp.on('Runtime.exceptionThrown', (p, sid) => {
       const s = sessions.get(sid);
@@ -348,6 +353,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
     await Promise.all([...sessions.keys()].map(async (sid) => {
       try {
         await cdp.send('Page.setBypassCSP', { enabled: bypass }, sid, { timeout: SETUP_TIMEOUT });
+        if (lyricsWindowEnabled()) await lyrics.attachSession(sid).catch((e) => log('lyrics binding failed:', e.message));
         await registerScript(sid, inputs);
       } catch (e) {
         log(`re-injection for session ${sid} failed:`, e.message);
@@ -409,6 +415,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
   let configTimer = null;
   let lastFingerprint = null;
   let lastPluginManager = readConfigKey('mac.pluginManager');
+  let lastLyricsWindow = readConfigKey('mac.lyricsWindow');
   function onConfigFileChange() {
     clearTimeout(configTimer);
     configTimer = setTimeout(() => {
@@ -421,6 +428,16 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
       if (pm !== lastPluginManager) {
         lastPluginManager = pm;
         try { logExtraction(extractPackedPlugins()); } catch (e) { log('extractPackedPlugins failed:', e); }
+      }
+      // The lyrics window replaces RefinedNowPlayingNext, which only goes (or comes back) with a
+      // fresh extraction and a page load.
+      const lw = readConfigKey('mac.lyricsWindow');
+      if (lw !== lastLyricsWindow) {
+        lastLyricsWindow = lw;
+        if (lw !== 'true') lyrics.dispose();
+        try { logExtraction(extractPackedPlugins()); } catch (e) { log('extractPackedPlugins failed:', e); }
+        reinjectAll().then(reloadAllPages).catch((e) => log('re-injection failed:', e));
+        return;
       }
       reinjectAll().catch((e) => log('re-injection failed:', e));
     }, 300);
@@ -452,6 +469,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
     log('shutting down');
     fs.unwatchFile(path.join(getDataPath(), 'config.json'), onConfigFileChange);
     disposeDevWatch?.();
+    lyrics.dispose();
     try { if (cdp && !cdp.closed) cdp.close(); } catch { /* ignore */ }
     try { await server?.close(); } catch { /* ignore */ }
     try {
@@ -489,6 +507,8 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
         onDevtools: async (targetId) => {
           try { await openDevtools(cdpPort, targetId); } catch (e) { log('openDevtools failed:', e.message); }
         },
+        onLyricsEval: (js) => lyrics.evalInWindow(js),
+        onLyricsSnapshot: (file) => lyrics.snapshotWindow(file),
         onHijackReport: (targetId, ids) => {
           if (ids?.length) log(`hijacks applied in ${targetId}: ${ids.join(', ')}`);
         },

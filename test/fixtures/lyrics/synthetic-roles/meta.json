@@ -1,0 +1,5 @@
+{
+  "id": "1868553",
+  "source": "harness-synthetic",
+  "note": "Real 1868553 response plus roles/source/lyricUser: drops single artistId 0, merges equal artistMetaList"
+}

@@ -1,0 +1,6 @@
+
+			body.rnp-custom-font .g-single-track .lyric *,
+			body.rnp-custom-font .n-single .head * {
+				font-family: inherit !important;
+			}
+		

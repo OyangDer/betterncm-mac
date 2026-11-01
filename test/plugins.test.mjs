@@ -288,7 +288,13 @@ test('the bundled RefinedNowPlayingNext is installed once, and not over another 
   resetProfile(false);
   assert.deepEqual(plugins.seedBundledPlugins(), ['RefinedNowPlayingNext-3.0.2.plugin']);
   assert.ok(fs.existsSync(path.join(PLUGINS, 'RefinedNowPlayingNext-3.0.2.plugin')));
+  const setLyricsWindow = (v) => {
+    const f = path.join(DP, 'config.json');
+    fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(fs.readFileSync(f, 'utf8')), 'mac.lyricsWindow': v }));
+  };
+  setLyricsWindow('false');
   assert.ok(plugins.extractPackedPlugins({ ncmVersion: '3.1.14' }).loaded.includes('RefinedNowPlayingNext'));
+  setLyricsWindow('true');
   // Deleted by the user: stays deleted.
   fs.rmSync(path.join(PLUGINS, 'RefinedNowPlayingNext-3.0.2.plugin'));
   assert.deepEqual(plugins.seedBundledPlugins(), []);
@@ -313,6 +319,16 @@ test('bundled plugins are not installed over a plugins_dev copy or while config.
   assert.deepEqual(plugins.seedBundledPlugins(), []);
   assert.deepEqual(fs.readdirSync(PLUGINS), []);
   assert.equal(fs.readFileSync(path.join(DP, 'config.json'), 'utf8'), broken, 'left for the user to fix');
+});
+
+test('the lyrics window keeps RefinedNowPlayingNext out, and turning it off brings it back', () => {
+  resetProfile(false);
+  plugins.seedBundledPlugins();
+  const res = plugins.extractPackedPlugins({ ncmVersion: '3.1.14' });
+  assert.ok(!res.loaded.includes('RefinedNowPlayingNext'));
+  assert.ok(res.skipped.some((s) => /lyrics window/.test(s.reason)));
+  fs.writeFileSync(path.join(DP, 'config.json'), JSON.stringify({ 'mac.lyricsWindow': 'false' }));
+  assert.ok(plugins.extractPackedPlugins({ ncmVersion: '3.1.14' }).loaded.includes('RefinedNowPlayingNext'));
 });
 
 test('turning the plugin manager on brings the market in at the next extraction', () => {

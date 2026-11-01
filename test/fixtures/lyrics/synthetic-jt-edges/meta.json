@@ -1,0 +1,5 @@
+{
+  "id": "9102",
+  "source": "harness-synthetic",
+  "note": "Plain LRC: leading empty/whitespace lines, 5000/5001 ms gaps, consecutive empties, CRLF, U+3000, [ss.x] and [m:ss:xx] tags, Latin punctuation mapping, multi-tag line, trailing empty"
+}

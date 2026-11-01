@@ -1,0 +1,59 @@
+/* The lyrics window's own rules, after RNPN's and our compat CSS. Most replace something RNPN
+   redraws every frame with something drawn once. */
+
+/* RNPN's page is the whole window here and always "open". */
+#rnp-view { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+/* Background: the host renders the blurred, dimmed cover once per track and size
+   (BNCMLyrics renderBackground); RNPN blurs it live with a 90px backdrop filter. */
+#rnp-view .rnp-background-blur { background-size: cover !important; background-position: center !important; transition: background-image 1.5s ease; }
+#rnp-view .rnp-background-blur::before,
+#rnp-view .rnp-background-blur::after { display: none !important; }
+body.rnp-bg-solid #rnp-view .rnp-bg { background: var(--rnp-accent-color-bg, #333); }
+body.rnp-bg-solid #rnp-view .rnp-background-blur { display: none; }
+
+/* 文字阴影 / 辉光: the same shadow drawn with the glyphs instead of a filter on each line, which
+   gives every line its own surface re-rasterised as it moves (compat-rnp-perf.js does this for
+   辉光 inside NCM). drop-shadow's blur is a standard deviation, text-shadow's a radius. */
+body.rnp-shadow .rnp-lyrics-line > div,
+body.rnp-shadow .rnp-contributors > div,
+body.rnp-text-glow .rnp-lyrics-line > div,
+body.rnp-text-glow .rnp-contributors > div { filter: none !important; }
+body.rnp-shadow .rnp-lyrics-line > div,
+body.rnp-shadow .rnp-contributors > div { text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); }
+body.rnp-light.rnp-shadow .rnp-lyrics-line > div,
+body.rnp-auto.rnp-system-light.rnp-shadow .rnp-lyrics-line > div { text-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
+body.rnp-text-glow .rnp-lyrics-line > div,
+body.rnp-text-glow .rnp-contributors > div { text-shadow: 0 4px 10px rgba(var(--rnp-accent-color-shade-2-rgb), 0.27); }
+
+/* Lines far outside the column are not painted at all. */
+.rnp-lyrics-line.offscreen { visibility: hidden; }
+
+/* The scrollbar thumb moves with a transform rather than `top`. */
+.rnp-lyrics-scrollbar .rnp-lyrics-scrollbar-thumb { top: 0 !important; transition: transform .5s ease, opacity .25s ease !important; }
+
+/* 长音发光: the word's text drawn only as its glow (a text-shadow cast from far off to the left),
+   faded in and out with opacity on the compositor. RNPN animates a drop-shadow filter instead. */
+.rnp-karaoke-word { position: relative; }
+.rnp-word-glow {
+  position: absolute; left: -10000px; top: 0; white-space: pre; pointer-events: none;
+  color: transparent; opacity: 0; will-change: opacity;
+  text-shadow: 10000px 0 15px rgba(var(--rnp-accent-color-shade-2-rgb), 1), 10000px 0 10px rgba(var(--rnp-accent-color-shade-2-rgb), 0.5);
+}
+
+/* 扫光 (slide): a bright copy of the word revealed left to right by a moving clip, both moved with
+   transforms. RNPN moves a mask position, which repaints the word every frame. */
+body.rnp-karaoke-animation-slide .rnp-karaoke-word { opacity: 1 !important; }
+body.rnp-karaoke-animation-slide .rnp-karaoke-word .w-dim { opacity: .4; }
+body.rnp-karaoke-animation-slide .rnp-karaoke-word .w-clip {
+  position: absolute; inset: 0; overflow: hidden; transform: translateX(-100%); will-change: transform;
+}
+body.rnp-karaoke-animation-slide .rnp-karaoke-word .w-fill { display: block; transform: translateX(100%); will-change: transform; }
+body.rnp-karaoke-animation-slide .rnp-lyrics-line:not([offset="0"]) .w-clip { transform: translateX(-100%) !important; transition: transform .2s ease !important; }
+body.rnp-karaoke-animation-slide .rnp-lyrics-line:not([offset="0"]) .w-fill { transform: translateX(100%) !important; transition: transform .2s ease !important; }
+
+/* Selectable text where it makes sense. */
+.bncm-copy-mode .rnp-lyrics, .bncm-panel-host .selectable { user-select: text; -webkit-user-select: text; }
+
+/* The page fills the window; nothing scrolls the document. */
+#rnp-view { position: fixed !important; inset: 0 !important; }

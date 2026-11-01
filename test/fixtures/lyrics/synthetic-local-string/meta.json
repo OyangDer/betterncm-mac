@@ -1,0 +1,5 @@
+{
+  "id": "local",
+  "source": "harness-synthetic",
+  "note": "A plain LRC string, as RNPN treats a local lyric (source Local)"
+}

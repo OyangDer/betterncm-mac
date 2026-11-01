@@ -1,0 +1,227 @@
+
+#rnp-view .n-single .cdin {
+  transform-origin: 50% 50%;
+  transition: transform 0.55s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+body.bncm-cover-paused #rnp-view .n-single .cdin {
+  transform: scale(0.84);
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.bncm-roaming #rnp-view .am-music-controls .rnp-amll-playlist { display: none !important; }
+body:not(.bncm-roaming) #rnp-view .am-music-controls .bncm-rnp-dislike { display: none !important; }
+#rnp-view .am-music-controls .bncm-rnp-dislike svg { width: 22px; height: 22px; }
+
+.rnp-window-tool-fullscreen,
+.rnp-full-screen-button { display: none !important; }
+
+#rnp-view { --rnp-v3-cover-width: clamp(240px, min(28vw, 50vh), 640px) !important; }
+#rnp-view .g-single-track .g-singlec-ct .n-single .rnp-v3-side { transform: translateY(3vh); }
+/* + 60px: .rnp-lyrics's own horizontal padding */
+#rnp-view .rnp-lyrics { max-width: calc(38vw + 60px); }
+/* The title clips its overflow (for its marquee) at a 1.08 line height, cutting off descenders
+   such as g; room below the text, taken back by the margin so nothing moves. */
+#rnp-view .n-single .mn .title .name { padding-bottom: 0.18em; margin-bottom: -0.18em; }
+/* Translations (and romaji) under the original line: RNPN draws translations at the original's
+   size, which CJK text makes look heavier than the line it translates, the more so the larger the
+   lyrics. 0.62em + 6px shrinks it more as the lyrics grow, as Apple Music sets translations
+   smaller: ~0.9x at 20px, ~0.8x at 30px, ~0.75x at 50px. A smaller size picked in RNPN's
+   settings (--lyric-translation-size-em) still wins. */
+#rnp-view .rnp-lyrics-line > div.rnp-lyrics-line-translated {
+  font-size: min(var(--lyric-translation-size-em, 1em), calc(0.62em + 6px));
+  margin-top: 0.12em;
+}
+#rnp-view .g-single-track .g-singlec-ct .n-single .mn { position: relative; }
+body:not(.bncm-vol-stock) #rnp-view .am-music-volume-controls {
+  position: absolute;
+  top: var(--bncm-vol-top, 0px);
+  right: var(--bncm-vol-right, 38px);
+  width: 30px !important; /* RNPN sizes the volume row with a more specific rule */
+  height: 30px;
+  border-radius: 15px; /* a circle, and a capsule when open, like the other controls */
+  overflow: hidden;
+  background: transparent;
+  color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.72);
+  transition: width 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, color 0.2s ease;
+}
+/* Plain icons like the rest of the page; a tint only under the pointer. */
+#rnp-view .rnp-info-more-button {
+  background: transparent !important;
+  border-radius: 50% !important;
+  transition: background-color 0.2s ease;
+}
+#rnp-view .rnp-info-more-button:hover { background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.1) !important; }
+body:not(.bncm-vol-stock) #rnp-view .am-music-volume-controls:hover {
+  width: 170px !important;
+  background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.14);
+  color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.96);
+}
+body:not(.bncm-vol-stock) #rnp-view .bncm-vol-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+body:not(.bncm-vol-stock) #rnp-view .bncm-vol-btn svg { width: 18px; height: 18px; display: block; }
+body:not(.bncm-vol-stock) #rnp-view .am-music-volume-controls .rnp-amll-volume-slider {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 34px;
+  width: auto;
+  height: 30px;
+  min-height: 0;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+body:not(.bncm-vol-stock) #rnp-view .am-music-volume-controls:hover .rnp-amll-volume-slider {
+  opacity: 1;
+  transition-delay: 0.08s;
+}
+body:not(.bncm-vol-stock) #rnp-view .am-music-volume-controls .rnp-amll-volume-slider .appkit-now-playing-slider-icon {
+  display: none;
+}
+
+#rnp-view .rnp-lyrics-switch {
+  width: 28px;
+  right: -36px;
+  align-items: center;
+}
+#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn {
+  box-sizing: border-box;
+  writing-mode: horizontal-tb;
+  width: auto;
+  min-width: 28px;
+  height: 28px;
+  margin-top: 4px;
+  padding: 0 8px;
+  border-radius: 14px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  background-color: transparent;
+  color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.62);
+}
+#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn svg { fill: currentColor; }
+#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn:hover { background-color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.1); color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.96); }
+#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn.active { background-color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.18); color: rgb(var(--rnp-accent-color-shade-2-rgb)); }
+#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn.active svg { fill: currentColor; }
+#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn.unavailable { opacity: 0.25; }
+
+body.rnp-text-glow .rnp-lyrics-line > div,
+body.rnp-text-glow .rnp-lyrics-overview-line > div,
+body.rnp-text-glow .rnp-contributors > div {
+  filter: none !important;
+  text-shadow: 0 4px 10px rgba(var(--rnp-accent-color-shade-2-rgb), 0.27);
+}
+#rnp-view .appkit-now-playing-slider .thumb { transition: none !important; }
+body.rnp-lyric-page-open #rnp-view { backdrop-filter: none !important; }
+body:not(.rnp-lyric-page-open) #rnp-view,
+body.rnp-lyric-page-open #root .should-hide-under-vinyl-mode,
+body.rnp-lyric-page-open #root .ad-tutorial-step-0-stop > [class*="scrollCss_"] {
+  content-visibility: hidden;
+}
+
+#rnp-view .rnp-window-topbar { padding-right: 14px; }
+#rnp-view .rnp-window-tools {
+  /* up to the window's top and right edges, and NEAR_PX / NEAR_LEFT_PX out into the page */
+  padding: 14px 14px 20px 40px;
+  margin: -14px -14px -20px -40px;
+  opacity: 1 !important;
+  transform: none !important;
+  pointer-events: auto !important;
+  gap: 6px;
+}
+/* Bare icons like the rest of the page; a tint only under the pointer. */
+#rnp-view .rnp-window-tools .rnp-window-tool {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%; /* round, like every icon button on the page */
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  color: rgb(var(--rnp-accent-color-shade-2-rgb));
+}
+/* On the icon rather than in the color, so the slider knobs do not darken where they overlap. */
+#rnp-view .rnp-window-tools .rnp-window-tool > svg, #rnp-view .rnp-window-tools .rnp-window-tool::before { opacity: 0.72; }
+#rnp-view .rnp-window-tools .rnp-window-tool:hover { background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.1); transform: none; }
+#rnp-view .rnp-window-tools .rnp-window-tool-plugin-close::before {
+  width: 18px;
+  height: 18px;
+  transform: none;
+  border-radius: 0;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 7.5l5.5 5.5 5.5-5.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+#rnp-view .rnp-window-tools .rnp-window-tool-plugin-close::after { display: none; }
+#rnp-view .rnp-window-tools .bncm-top-tool { order: -1; }
+#rnp-view .rnp-window-tools .bncm-top-tool::before, #rnp-view .rnp-window-tools .bncm-top-tool::after { display: none; }
+#rnp-view .rnp-window-tools .bncm-top-tool svg { width: 18px; height: 18px; }
+#rnp-view .rnp-window-tools .bncm-top-tool[hidden] { display: none; }
+#rnp-view .rnp-window-tools .bncm-top-tool.bncm-on { background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.16); }
+#rnp-view .rnp-window-tools:not(:hover) .bncm-top-tool:not(.bncm-top-settings.bncm-on) { opacity: 0; pointer-events: none; }
+#rnp-settings { display: none !important; }
+.rnp-settings-menu { top: 56px !important; right: 14px !important; }
+#rnp-view .rnp-lyrics-switch-btn-overview-mode { visibility: hidden !important; pointer-events: none !important; }
+
+/* The views switcher (compat-rnp-panels.js) */
+/* In RNPN's top-right tool row, first: one bare icon, the current view's, shown like the row's
+   other buttons only while the pointer is near the row. Under the pointer it opens leftward
+   into a capsule with all four, the current one staying at its right end; a click collapses it
+   again until the pointer leaves it. */
+#bncm-rnp-views {
+  position: relative;
+  flex: none;
+  order: -2;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: 0 0 0 3px transparent;
+  transition: width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+#rnp-view .rnp-window-tools:not(:hover) #bncm-rnp-views:not(.bncm-open) { opacity: 0; pointer-events: none; }
+#bncm-rnp-views[hidden] { display: none; }
+#bncm-rnp-views.bncm-open {
+  width: var(--bncm-views-open-width, 28px);
+  background: rgba(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255), 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255), 0.1);
+}
+#bncm-rnp-views button {
+  all: unset;
+  position: absolute;
+  top: 0;
+  right: 0;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255));
+  cursor: default;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(0);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s ease, background-color 0.2s ease;
+}
+#bncm-rnp-views button svg { width: 18px; height: 18px; display: block; opacity: 0.72; transition: opacity 0.2s ease; }
+#bncm-rnp-views button[aria-pressed="true"] { opacity: 1; pointer-events: auto; z-index: 1; }
+#bncm-rnp-views.bncm-open button {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(calc(var(--slot) * -32px));
+}
+#bncm-rnp-views.bncm-open button:not([aria-pressed="true"]) svg { opacity: 0.5; }
+#bncm-rnp-views.bncm-open button[aria-pressed="true"] { background: rgba(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255), 0.16); }
+#bncm-rnp-views button:hover { background: rgba(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255), 0.1); }
+#bncm-rnp-views button:hover svg { opacity: 1; }
+#bncm-rnp-views button[hidden] { display: none; }
