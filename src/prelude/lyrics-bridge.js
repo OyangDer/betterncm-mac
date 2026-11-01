@@ -27,6 +27,8 @@ const STOCK_GRACE_MS = 1500; // a shift-click that opened nothing stops letting 
 const OPEN_ANSWER_MS = 1500; // the injector answers an open at once; without an answer NCM's page opens
 const FS_SETTLE_MS = 150; // NCM's window stopped resizing
 const FS_WAIT_MS = 1500; // at most
+const FS_RETRY_MS = 900; // a zoomed NCM window has un-zoomed by then
+const FS_SETTLE_AGAIN_MS = 800;
 const FETCH_HOSTS = /^https:\/\/(music\.163\.com|interface\d*\.music\.163\.com)\//;
 const PROGRESS = 'audioplayer.onPlayProgress';
 const PLAY_STATE = 'audioplayer.onPlayState';
@@ -227,8 +229,9 @@ function installLyricsBridge() {
   function frame() {
     return { x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight };
   }
+  // NCM's own flag only: a zoomed window below a notch is as large as Chromium's screen, yet windowed
   function fullscreen() {
-    return !!state().app?.isFullScreen || (window.outerWidth >= screen.width && window.outerHeight >= screen.height);
+    return !!state().app?.isFullScreen;
   }
 
   function snapshot() {
@@ -287,7 +290,14 @@ function installLyricsBridge() {
       done = true;
       window.removeEventListener('resize', onResize);
       clearTimeout(fsTimer);
-      if (active) post({ t: 'fullscreen', v, frame: frame() });
+      if (!active) return;
+      const f = frame();
+      post({ t: 'fullscreen', v, frame: f });
+      // NCM's window may still settle after that (leaving full screen it restores in steps): once more
+      fsTimer = setTimeout(() => {
+        const g = frame();
+        if (active && JSON.stringify(g) !== JSON.stringify(f)) post({ t: 'fullscreen', v, frame: g });
+      }, FS_SETTLE_AGAIN_MS);
     };
     const onResize = () => { clearTimeout(fsTimer); fsTimer = setTimeout(send, FS_SETTLE_MS); };
     window.addEventListener('resize', onResize);
@@ -732,7 +742,17 @@ function installLyricsBridge() {
     // the injector is shutting down while NCM keeps running
     detach: () => { detach(); return true; },
     // the window's green button: NCM goes full screen (or back), and the window follows it
-    setFullscreen: (m) => { winCall('winhelper.setWindowFullScreen', [!!m.v]); return true; },
+    setFullscreen: (m) => {
+      const v = !!m.v;
+      winCall('winhelper.setWindowFullScreen', [v]);
+      // a zoomed NCM window only un-zooms on the first call; ask again once that is done
+      if (v) {
+        setTimeout(() => window.channel?.call('winhelper.isWindowFullScreen', (fs) => {
+          if (!fs) winCall('winhelper.setWindowFullScreen', [true]);
+        }, []), FS_RETRY_MS);
+      }
+      return true;
+    },
   };
 
   // Panel and menu actions handed to NCM: lyrics-actions-*.js preludes register them in

@@ -205,11 +205,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         window.backgroundColor = NSColor(white: 0.2, alpha: 1) // RNPN's #333 until the page paints
         window.delegate = self
         window.collectionBehavior = Host.windowed
-        window.standardWindowButton(.miniaturizeButton)?.target = self
-        window.standardWindowButton(.miniaturizeButton)?.action = #selector(minimizeBoth)
-        // the green button, also as a zoom button while the window lies over NCM's full screen
-        window.standardWindowButton(.zoomButton)?.target = self
-        window.standardWindowButton(.zoomButton)?.action = #selector(requestNcmFullscreen)
+        hookButtons()
 
         let cfg = WKWebViewConfiguration()
         cfg.setURLSchemeHandler(AssetHandler(), forURLScheme: "bncm")
@@ -387,7 +383,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         closeTimer?.invalidate()
         if NSApp.isHidden { NSApp.unhide(nil) }
         setNcmFS(fullscreen)
-        if ncmFS { window.setFrame(screenFrame(), display: false) }
+        if ncmFS { window.setFrame(fullscreenFrame(frame), display: false) }
         else if !window.isVisible, let r = cocoaFrame(frame) { window.setFrame(r, display: false) }
         showInActiveSpace()
         sendWindowState()
@@ -401,7 +397,20 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     // while NCM animates into or out of full screen: on every Space, so it is on top of NCM's at once
     static let following: NSWindow.CollectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
 
-    func screenFrame() -> NSRect { (window.screen ?? NSScreen.main)?.frame ?? window.frame }
+    /// What NCM's full-screen window covers: the screen below the camera housing, where a notched
+    /// display's menu bar lives (macOS keeps full-screen content out of it).
+    func screenFrame() -> NSRect {
+        guard let sc = window.screen ?? NSScreen.main else { return window.frame }
+        var f = sc.frame
+        if #available(macOS 12.0, *) { f.size.height -= sc.safeAreaInsets.top }
+        return f
+    }
+
+    /// NCM's own full-screen frame when it reported one, else the same area worked out here.
+    func fullscreenFrame(_ frame: [String: Any]?) -> NSRect {
+        if let r = cocoaFrame(frame), r.width > 0, r.height > 0 { return r }
+        return screenFrame()
+    }
 
     /// Shows the window, key, in the Space that is active now (NCM's full-screen one when NCM is in
     /// full screen), then pins it there: with .moveToActiveSpace left on it would follow the user to
@@ -418,8 +427,23 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         }
     }
 
+    /// The yellow and green buttons (AppKit makes new ones when the window gets its title bar back).
+    func hookButtons() {
+        window.standardWindowButton(.miniaturizeButton)?.target = self
+        window.standardWindowButton(.miniaturizeButton)?.action = #selector(minimizeBoth)
+        window.standardWindowButton(.zoomButton)?.target = self
+        window.standardWindowButton(.zoomButton)?.action = #selector(requestNcmFullscreen)
+    }
+
     func setNcmFS(_ v: Bool) {
+        let was = ncmFS
         ncmFS = v
+        if v != was || window.styleMask.contains(.titled) == v {
+            // square corners and no title bar over a full screen, as a native full-screen window
+            if v { window.styleMask.remove(.titled) } else { window.styleMask.insert(.titled); hookButtons() }
+            web.frame = window.contentView!.bounds
+            layoutStrip()
+        }
         window.collectionBehavior = v ? Host.overNcm : Host.windowed
         strip.isHidden = v // nothing to drag over a full screen
         // as in native full screen: the auto-hidden menu bar would slide over them anyway; ⌃⌘F leaves,
@@ -437,7 +461,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         emit(["from": "host", "op": "setFullscreen", "v": !ncmFS])
         // NCM did not move (e.g. not allowed): settle back
         followTimer?.invalidate()
-        followTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
+        followTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
             guard let self, self.window.collectionBehavior == Host.following else { return }
             self.setNcmFS(self.ncmFS)
         }
@@ -445,10 +469,11 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     /// NCM entered or left full screen (the injector's "ncmFullscreen", NCM's new frame with it).
     func ncmFullscreen(_ v: Bool, frame: [String: Any]?) {
+        log("ncmFullscreen \(v) frame \(frame ?? [:]) shown \(wantShown) closing \(closing)")
         followTimer?.invalidate()
         setNcmFS(v)
         guard wantShown, !closing else { return }
-        if v { window.setFrame(screenFrame(), display: true) }
+        if v { window.setFrame(fullscreenFrame(frame), display: true) }
         else if let r = cocoaFrame(frame) { window.setFrame(r, display: true) }
         // shown and made key in the Space that is active now: NCM's full-screen one, or the desktop
         showInActiveSpace()

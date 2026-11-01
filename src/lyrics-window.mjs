@@ -219,6 +219,7 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
     if (sid !== bridgeSid || !BRIDGE_TYPES.has(msg.t)) return;
     if (msg.t === 'fullscreen') {
       // NCM entered or left full screen: the window lays itself over it (host), not the page
+      log(`lyrics: NCM full screen ${msg.v ? 'on' : 'off'}`, JSON.stringify(msg.frame), open ? '' : '(window closed)');
       if (open) toHost({ to: 'host', op: 'ncmFullscreen', v: !!msg.v, frame: msg.frame });
       return;
     }
