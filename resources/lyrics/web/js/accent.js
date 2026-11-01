@@ -6,7 +6,9 @@ import { request } from './bus.js';
 import { computeAccentModal } from './accent-core.js';
 
 const cache = new Map(); // url|variant -> vars
+const inflight = new Map(); // url|variant -> promise of vars
 let applied = '';
+let wanted = ''; // the latest request: an older cover finishing later must not win
 
 function decode(b64) {
   const bin = atob(b64);
@@ -23,15 +25,19 @@ export async function applyAccentFor(url, variant) {
   if (!url) return;
   const v = variant === 'off' ? 'primary' : variant;
   const key = `${url}|${v}`;
+  wanted = key;
   let vars = cache.get(key);
   if (!vars) {
-    const b64 = await request('accentPixels', { url }, 10000);
-    const r = computeAccentModal(decode(b64), v, 12);
-    vars = r.vars;
+    if (!inflight.has(key)) {
+      inflight.set(key, request('accentPixels', { url }, 10000)
+        .then((b64) => computeAccentModal(decode(b64), v, 12).vars)
+        .finally(() => inflight.delete(key)));
+    }
+    vars = await inflight.get(key);
     cache.set(key, vars);
     if (cache.size > 40) cache.delete(cache.keys().next().value);
   }
-  if (applied === key) return;
+  if (wanted !== key || applied === key) return;
   applied = key;
   for (const [k, val] of Object.entries(vars)) document.body.style.setProperty(k, val);
 }

@@ -3,8 +3,8 @@ import { host, ncmFetch, on, send, log } from './bus.js';
 import { setPosition } from './clock.js';
 import { mountLyrics } from './lyrics.js';
 import { parseLyrics } from './parse.js';
-import { mountSide, requestCover, layoutSide, coverUrl } from './side.js';
-import { applyAccentFor } from './accent.js';
+import { mountSide, layoutSide } from './side.js';
+import { mountAppearance } from './appearance.js';
 import { mountTools } from './tools.js';
 import { state, set, watch } from './state.js';
 import './settings.js';
@@ -28,52 +28,7 @@ async function loadTemplate() {
 const BASE_CLASSES = ['refined-now-playing', 'no-material-you-theme', 'is-osx-tag', 'rnp-lyric-page-open', 'mq-playing', 'no-exclusive-mode',
   'rnp-current-lyric-alignment-50', 'rnp-song-alias-display-alias-first'];
 
-// --- colour scheme, accent, text effect, background ---------------------------------------------
-const darkQuery = matchMedia('(prefers-color-scheme: dark)');
-function applyScheme() {
-  const s = state.settings || {};
-  const b = document.body.classList;
-  const sys = darkQuery.matches ? 'dark' : 'light';
-  b.toggle('rnp-auto', s.scheme === 'auto');
-  b.toggle('rnp-dark', s.scheme === 'dark');
-  b.toggle('rnp-light', s.scheme === 'light');
-  b.toggle('rnp-system-dark', sys === 'dark');
-  b.toggle('rnp-system-light', sys === 'light');
-  const scheme = s.scheme === 'auto' ? sys : s.scheme;
-  if (scheme !== state.scheme) { set('scheme', scheme); requestCover(); }
-}
-darkQuery.addEventListener('change', applyScheme);
-
-function applyLook(s, old) {
-  const b = document.body.classList;
-  b.toggle('rnp-shadow', s.textEffect === 'shadow');
-  b.toggle('rnp-text-glow', s.textEffect === 'glow');
-  for (const v of ['primary', 'secondary', 'tertiary']) b.toggle(`accent-color-${v}`, s.accent === v);
-  b.toggle('enable-accent-color', s.accent !== 'off');
-  b.toggle('hide-player-controls', !s.showControls);
-  b.toggle('rnp-bg-blur', s.bgType === 'blur');
-  b.toggle('rnp-bg-gradient', s.bgType === 'gradient');
-  b.toggle('rnp-bg-solid', s.bgType === 'solid');
-  b.toggle('gradient-bg-dynamic', !!s.gradientDynamic);
-  b.toggle('rnp-custom-font', s.font === 'custom' && s.fontList.length > 0);
-  document.body.style.fontFamily = s.font === 'custom' && s.fontList.length
-    ? [...s.fontList.map((f) => `"${f.replace(/"/g, '')}"`), '"PingFang SC"', 'arial', 'sans-serif'].join(', ')
-    : '';
-  document.body.style.setProperty('--bg-dim-for-gradient-bg', String((s.gradientDim ?? 45) / 100));
-  applyScheme();
-  if (old && (s.bgBlur !== old.bgBlur || s.bgDim !== old.bgDim)) requestCover();
-  applyAccent();
-}
-
-async function applyAccent() {
-  const url = coverUrl(state.track?.cover);
-  if (!state.track || !url) return;
-  try {
-    await applyAccentFor(url, state.settings?.accent || 'primary');
-  } catch (e) {
-    log('accent failed:', String(e?.message || e));
-  }
-}
+// --- colour scheme, accent, text effect, background, window states: appearance.js ----------------------
 
 // --- lyrics for the current track -----------------------------------------------------------------
 const lyricCache = new Map();
@@ -114,7 +69,7 @@ on('mode', (m) => set('mode', m.v));
 on('volume', (m) => set('volume', Number(m.v)));
 on('roaming', (m) => { set('roaming', !!m.v); if (m.icon) set('dislikeIcon', m.icon); });
 on('hello', () => send('snapshot'));
-on('open', () => { set('view', state.view || 'lyrics'); });
+on('open', (m) => { if (m.version) set('version', m.version); set('view', state.view || 'lyrics'); });
 on('host.window', (m) => {
   const was = state.window.visible;
   set('window', { w: m.w, h: m.h, visible: !!m.visible, fullscreen: !!m.fullscreen });
@@ -129,8 +84,6 @@ watch('track', (t, old) => {
   if (!t) return;
   if (!old || t.id !== old.id) { setPosition(0, 'jump'); loadLyrics(t.id); }
 });
-watch('settings', applyLook);
-watch('track', (t, old) => { if (t && (!old || t.cover !== old.cover)) applyAccent(); });
 
 // --- keyboard ---------------------------------------------------------------------------------------
 document.addEventListener('keydown', (e) => {
@@ -154,6 +107,7 @@ async function start() {
   mountSide({ collapse });
   mountLyrics(document.querySelector('#rnp-view .lyric'));
   mountTools({ collapse });
+  mountAppearance();
   document.querySelector('#rnp-view .rnp-control-thumb')?.addEventListener('click', collapse);
   // RNPN shows the bottom handle when the pointer is near the bottom edge
   document.addEventListener('mousemove', (e) => {

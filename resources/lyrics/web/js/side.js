@@ -49,7 +49,11 @@ export function mountSide({ collapse }) {
   els.play.addEventListener('click', () => send('toggle'));
   els.mode.addEventListener('click', () => send('mode'));
   els.playlist.addEventListener('click', () => { send('playlist'); collapse(); });
-  addDislike();
+  els.more.addEventListener('click', (e) => {
+    e.stopPropagation();
+    import('./menu.js').then((m) => m.openMenu?.(els.more, { collapse })).catch((err) => console.error('menu unavailable', err));
+  });
+  addDislike(collapse);
   els.ul.addEventListener('click', (e) => {
     const a = e.target.closest('a[data-hash]');
     if (!a) return;
@@ -191,7 +195,7 @@ function fitTitle(force) {
   titleText = text;
   if (!titleStyle) { titleStyle = document.createElement('style'); document.head.append(titleStyle); }
   const probe = document.createElement('div');
-  Object.assign(probe.style, { position: 'absolute', top: '-9999px', left: '-9999px', width: 'auto', height: 'auto', whiteSpace: 'nowrap', fontWeight: '700' });
+  Object.assign(probe.style, { position: 'absolute', top: '-9999px', left: '-9999px', width: 'auto', height: 'auto', whiteSpace: 'nowrap', fontWeight: '700', fontFamily: 'var(--bncm-font-semibold)' }); // the face the title is drawn in (app.css)
   probe.innerText = text;
   document.body.append(probe);
   const cap = Math.max(Math.min(0.045 * document.body.clientHeight, 52), 34);
@@ -246,8 +250,10 @@ export function requestCover() {
   if (!t) return;
   const s = state.settings || {};
   const light = state.scheme === 'light';
-  els.cdimg.classList.add('loading');
-  host('cover', { url: coverUrl(t.cover), dim: (s.bgDim ?? 55) / 100, overlay: light ? '#fff' : '#000', blur: s.bgBlur ?? 90 });
+  const url = coverUrl(t.cover);
+  // a new cover is shown as loading until it arrives; a background-only re-render keeps the cover
+  if (state.cover?.url !== url) els.cdimg.classList.add('loading');
+  host('cover', { url, dim: (s.bgDim ?? 55) / 100, overlay: light ? '#fff' : '#000', blur: s.bgBlur ?? 90 });
 }
 
 function renderCover(c) {
@@ -358,13 +364,14 @@ function renderMode(m) {
   els.mode.setAttribute('aria-label', `Playback mode: ${label}`);
 }
 
-function addDislike() {
+function addDislike(collapse) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'am-music-track-btn bncm-rnp-dislike';
   btn.title = '减少推荐';
   btn.setAttribute('aria-label', '减少推荐');
-  btn.addEventListener('click', (e) => { e.stopPropagation(); send('dislike'); });
+  // NCM's dislike opens a modal inside its own window, which this one covers
+  btn.addEventListener('click', (e) => { e.stopPropagation(); send('dislike'); collapse(); });
   els.controls.append(btn);
   watch('dislikeIcon', (svg) => { btn.innerHTML = svg || ''; });
 }

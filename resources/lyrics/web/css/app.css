@@ -1,6 +1,20 @@
 /* The lyrics window's own rules, after RNPN's and our compat CSS. Most replace something RNPN
    redraws every frame with something drawn once. */
 
+/* NCM's Chromium draws text with macOS font smoothing: stroke widths measured on bpreview/ref.png
+   match this, and are visibly thinner with base.css's antialiased (title: 8.3 px in RNPN, 8.2 px
+   here, 7.6 px antialiased). */
+body { -webkit-font-smoothing: subpixel-antialiased; }
+
+/* Bold text in PingFang's Semibold face by name, as NCM's Chromium draws it. Asked for as
+   "PingFang SC" 600-700, WebKit takes another instance with wider advances (about 1.3% of the size
+   per glyph) and heavier strokes, which wraps lyric lines and titles that fit in RNPN.
+   --bncm-font-semibold is set with the custom fonts (appearance.js). */
+body { --bncm-font-semibold: "PingFang SC Semibold", "PingFang SC", arial, "Segoe UI Emoji", "Segoe UI Symbol", sans-serif, simsun, "Mongolian Baiti"; }
+body.original-lyric-bold .rnp-lyrics-line :is(.rnp-lyrics-line-karaoke, .rnp-lyrics-line-original),
+.rnp-lyrics-overview .rnp-lyrics-overview-line > .rnp-lyrics-overview-line-original,
+.g-single-track .g-singlec-ct .n-single .mn .head .inf .title h1 { font-family: var(--bncm-font-semibold); }
+
 /* RNPN's page is the whole window here and always "open". */
 #rnp-view { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 
@@ -9,22 +23,52 @@
 #rnp-view .rnp-background-blur { background-size: cover !important; background-position: center !important; transition: background-image 1.5s ease; }
 #rnp-view .rnp-background-blur::before,
 #rnp-view .rnp-background-blur::after { display: none !important; }
-body.rnp-bg-solid #rnp-view .rnp-bg { background: var(--rnp-accent-color-bg, #333); }
-body.rnp-bg-solid #rnp-view .rnp-background-blur { display: none; }
+/* Only the current type's layer (appearance.js adds the gradient and solid ones). */
+body:not(.rnp-bg-blur) #rnp-view .rnp-background-blur,
+body:not(.rnp-bg-gradient) #rnp-view .rnp-background-gradient,
+body:not(.rnp-bg-solid) #rnp-view .rnp-background-solid { display: none; }
 
-/* 文字阴影 / 辉光: the same shadow drawn with the glyphs instead of a filter on each line, which
-   gives every line its own surface re-rasterised as it moves (compat-rnp-perf.js does this for
-   辉光 inside NCM). drop-shadow's blur is a standard deviation, text-shadow's a radius. */
-body.rnp-shadow .rnp-lyrics-line > div,
-body.rnp-shadow .rnp-contributors > div,
-body.rnp-text-glow .rnp-lyrics-line > div,
-body.rnp-text-glow .rnp-contributors > div { filter: none !important; }
-body.rnp-shadow .rnp-lyrics-line > div,
-body.rnp-shadow .rnp-contributors > div { text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); }
-body.rnp-light.rnp-shadow .rnp-lyrics-line > div,
-body.rnp-auto.rnp-system-light.rnp-shadow .rnp-lyrics-line > div { text-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
-body.rnp-text-glow .rnp-lyrics-line > div,
-body.rnp-text-glow .rnp-contributors > div { text-shadow: 0 4px 10px rgba(var(--rnp-accent-color-shade-2-rgb), 0.27); }
+/* 渐变: RNPN's gradient layer is 400% of the window and shows its middle; 动态 pans that window
+   around the layer's edge, 0% 0% → 100% 0% → 100% 100% → 0% 100%, over 120 s, by animating
+   background-position. Here the layer is an image of the gradient (appearance.js) at that size,
+   moved by a transform, -75% of its own size being background-position 100%. */
+#rnp-view .rnp-background-gradient { animation: none !important; overflow: hidden; }
+#rnp-view .rnp-background-gradient::before { z-index: 1; }
+#rnp-view .rnp-background-gradient > img {
+  position: absolute; left: 0; top: 0; width: 400%; height: 400%; max-width: none;
+  transform: translate(-37.5%, -37.5%); will-change: transform;
+}
+body.gradient-bg-dynamic #rnp-view .rnp-background-gradient > img {
+  animation: bncm-gradient-pan 120s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+body.gradient-bg-dynamic.bncm-bg-paused #rnp-view .rnp-background-gradient > img { animation-play-state: paused; }
+@keyframes bncm-gradient-pan {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-75%, 0); }
+  50% { transform: translate(-75%, -75%); }
+  75% { transform: translate(0, -75%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* 文字阴影 / 辉光 (RNPN: filter: var(--rnp-drop-shadow) on the lyric lines, the title and the info):
+   the same shadow drawn with the glyphs instead of a filter on each line, which gives every line
+   its own surface re-rasterised as it moves (compat-rnp-perf.js does this for 辉光 inside NCM).
+   drop-shadow's blur is a standard deviation, text-shadow's a radius: 0 4px 10px measures the same
+   as RNPN's 0 4px 5px under the lyrics of bpreview/ref.png. */
+body.rnp-shadow > * { --bncm-text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); }
+body.rnp-shadow.rnp-light > *,
+body.rnp-shadow.rnp-auto.rnp-system-light > * { --bncm-text-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
+body.rnp-text-glow > * { --bncm-text-shadow: 0 4px 10px rgba(var(--rnp-accent-color-shade-2-rgb), 0.27); }
+:is(body.rnp-shadow, body.rnp-text-glow) :is(.rnp-lyrics-line > div, .rnp-lyrics-overview-line > div, .rnp-contributors > div),
+:is(body.rnp-shadow, body.rnp-text-glow) .g-single-track .g-singlec-ct .n-single .mn .head .inf :is(.title, .info) {
+  filter: none !important;
+  text-shadow: var(--bncm-text-shadow);
+}
+/* The more button's dots are a box-shadow, which text-shadow does not reach; it is small and still. */
+:is(body.rnp-shadow, body.rnp-text-glow) .g-single-track .g-singlec-ct .n-single .mn .head .inf .info .rnp-info-more-button { filter: var(--rnp-drop-shadow); }
+/* The title clips its overflow (for its marquee), which a filter on .title drew outside of: room
+   for the shadow below it, taken back by the margin so nothing moves. */
+:is(body.rnp-shadow, body.rnp-text-glow) #rnp-view .n-single .mn .title .name { padding-bottom: calc(0.18em + 12px); margin-bottom: calc(-0.18em - 12px); }
 
 /* Lines far outside the column are not painted at all. */
 .rnp-lyrics-line.offscreen { visibility: hidden; }
@@ -57,3 +101,14 @@ body.rnp-karaoke-animation-slide .rnp-lyrics-line:not([offset="0"]) .w-fill { tr
 
 /* The page fills the window; nothing scrolls the document. */
 #rnp-view { position: fixed !important; inset: 0 !important; }
+
+/* Opening (appearance.js): while the window is hidden the page waits at the start of RNPN's
+   entrance, and plays it when the window shows: .g-single (with the background) fades in, its
+   content rises from half the page, and the cover, the info and the lyrics follow. */
+body.bncm-closed #rnp-view .g-single,
+body.bncm-closed #rnp-view .g-single .g-singlec-ct { animation: none; }
+body.bncm-closed #rnp-view .g-single { opacity: 0; }
+body.bncm-closed #rnp-view .g-single .g-singlec-ct { transform: translateY(50vh); }
+body.bncm-closed.rnp-lyric-page-open #rnp-view .g-single-track .g-singlec-ct .n-single .sd { opacity: 0; transform: translate3d(0, 28px, 0); transition: none; }
+body.bncm-closed.rnp-lyric-page-open #rnp-view .g-single-track .content { opacity: 0; transform: translate3d(0, 36px, 0); transition: none; }
+body.bncm-closed.rnp-lyric-page-open #rnp-view .g-single-track .g-singlec-ct .lyric { opacity: 0; transform: translate3d(24px, 0, 0); transition: none; }

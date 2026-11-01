@@ -73,7 +73,12 @@ export function mountLyrics(column) {
     if (structural) build(state.lyrics);
     else if (sized || ['zoom', 'blur', 'fade', 'alignment', 'offset'].some((k) => s[k] !== old[k])) relayout(true);
   });
-  watch('window', () => relayout(true));
+  watch('window', (w, old) => {
+    // hidden: nothing to schedule; shown again: catch up at once
+    if (!w.visible) { clearTimeout(lineTimer); return; }
+    if (old && !old.visible) { tick(true); return; }
+    relayout(true);
+  });
   watch('playing', () => onPlayState());
   onClock((kind) => {
     if (kind === 'state') return;
@@ -267,7 +272,7 @@ function scrollAt(t, c) {
 }
 
 function tick(jump) {
-  if (!model?.lyrics?.length) return;
+  if (!model?.lyrics?.length || !state.window.visible) return;
   clearTimeout(lineTimer);
   const t = lyricTime();
   const c = currentAt(t);

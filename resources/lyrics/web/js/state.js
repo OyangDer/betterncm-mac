@@ -15,6 +15,7 @@ export const state = {
   lyrics: null, // parse.js output for state.track.id
   view: 'lyrics', // lyrics | baike | similar | comment
   scheme: 'dark', // resolved colour scheme
+  version: '', // BetterNCM's version, sent with open
 };
 
 export function set(key, value) {
