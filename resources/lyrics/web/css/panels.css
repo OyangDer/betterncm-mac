@@ -1,0 +1,46 @@
+/* The frame shared by 百科 / 相似推荐 / 评论 (compat-rnp-panels.js, bspec panels-visual.md §0): where
+   the panel sits, how it fades in, its palette, scroller and cards. Each panel's own rules live in
+   css/panel-<id>.css. */
+.bncm-panel-host {
+  --fg: var(--rnp-accent-color-shade-2-rgb, 255, 255, 255);
+  /* NCM's text colours (--colorWhite1..12), remapped to the cover's colour as on RNPN's page */
+  --c1: rgba(var(--fg), 1); --c2: rgba(var(--fg), .9); --c3: rgba(var(--fg), .8); --c4: rgba(var(--fg), .7);
+  --c5: rgba(var(--fg), .6); --c6: rgba(var(--fg), .5); --c7: rgba(var(--fg), .4); --c8: rgba(var(--fg), .3);
+  --c9: rgba(var(--fg), .25); --c10: rgba(var(--fg), .1); --c11: rgba(var(--fg), .06); --c12: rgba(var(--fg), .03);
+  --liked: rgb(255, 58, 58);
+  position: fixed;
+  left: var(--bncm-panel-left); top: var(--bncm-panel-top);
+  width: var(--bncm-panel-width); height: var(--bncm-panel-height);
+  z-index: 999; /* above RNPN's #rnp-view (998), below its tool row's menus */
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateY(12px);
+  font-family: inherit; color: var(--c2);
+}
+.bncm-panel-host.shown {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: none;
+  transition: opacity .26s ease, transform .34s cubic-bezier(.2, .8, .2, 1);
+}
+/* The lyric column fades out while a panel shows. */
+body:not([data-bncm-view="lyrics"]) #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-switch, .rnp-lyrics-scrollbar) {
+  opacity: 0; visibility: hidden; transition: opacity .24s ease, visibility 0s linear .24s;
+}
+body[data-bncm-view="lyrics"] #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-switch, .rnp-lyrics-scrollbar) { transition: opacity .24s ease; }
+/* The settings popover covers the panel. */
+body.bncm-settings-open .bncm-panel-host { visibility: hidden; }
+
+.bncm-panel { display: none; position: absolute; inset: 0; }
+.bncm-panel.active { display: block; }
+/* The scroller: an 8px fade at the top, 56px at the bottom, no scrollbar. */
+.bncm-panel .bncm-scroll {
+  height: 100%; overflow: hidden auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column;
+  -webkit-mask-image: linear-gradient(transparent, #000 8px, #000 calc(100% - 56px), transparent);
+}
+.bncm-panel .bncm-scroll::-webkit-scrollbar { display: none; }
+/* Cards (NCM's CardContainer_ restyled by compat-rnp-panels.js). */
+.bncm-card { background: rgba(var(--fg), .07); border-radius: 16px; margin-bottom: 20px; flex: none; }
+.bncm-panel .bncm-empty { color: var(--c7); font-size: 14px; text-align: center; padding: 80px 0; }
+.bncm-panel a { cursor: default; }
+
+/* WebKit draws bold "PingFang SC" about 1.3% wider than NCM's Chromium; the Semibold face matches it (app.css) */
+.bncm-card-title, .bncm-cm-head { font-family: var(--bncm-font-semibold); }

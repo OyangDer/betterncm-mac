@@ -1,0 +1,105 @@
+/* 相似推荐: NCM's IncludeSongCard (相关歌单) and SimilarSongsCard (相似歌曲), bspec panels-visual.md §2. */
+.bncm-sim-plcard, .bncm-sim-songcard { padding: 20px 20px 16px; display: flex; flex-direction: column; }
+.bncm-sim-plcard[hidden], .bncm-sim-songcard[hidden] { display: none; }
+.bncm-panel-similar .bncm-card-title {
+  font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: .5px; color: var(--c1);
+}
+.bncm-panel-similar svg { display: block; width: 1em; height: 1em; }
+
+/* 相关歌单 */
+.bncm-sim-plcard { gap: 20px; }
+.bncm-sim-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+.bncm-sim-pl { display: flex; flex-direction: column; gap: 4px; position: relative; min-width: 0; }
+.bncm-sim-plcover { position: relative; aspect-ratio: 1; border-radius: 6px; }
+.bncm-sim-plcover img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 6px;
+  box-shadow: 0 0 1px 1px var(--c11); cursor: pointer; background: var(--c11);
+}
+/* the play count over a dark fade at the top of the cover */
+.bncm-sim-count {
+  position: absolute; top: 4px; right: 6px; display: flex; align-items: center;
+  font-size: 15px; line-height: 21px; color: var(--c1); pointer-events: none;
+  /* NCM's dolphin face is not on the Mac; DIN Alternate is the closest system face */
+  font-family: dolphin, "DIN Alternate", -apple-system, "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif;
+}
+.bncm-sim-plcover::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 60px; pointer-events: none;
+  border-radius: 6px 6px 0 0; background: linear-gradient(rgba(0, 0, 0, .2), rgba(0, 0, 0, 0));
+}
+.bncm-sim-count { z-index: 1; }
+.bncm-sim-count svg { width: 15px; height: 15px; }
+.bncm-sim-plname {
+  margin-top: 6px; height: 36px; font-size: 13px; line-height: 18px; color: var(--c2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word;
+}
+.bncm-sim-more { margin-top: 1px; font-size: 13px; line-height: 15px; text-align: center; color: var(--c7); }
+.bncm-sim-more:hover { color: var(--c4); }
+
+/* 相似歌曲 */
+.bncm-sim-songcard > .bncm-card-title { margin-bottom: 15px; }
+.bncm-sim-playall {
+  display: inline-flex; align-items: center; vertical-align: middle; box-sizing: border-box;
+  height: 20px; margin: 0 0 2px 7px; padding: 3px 8px 3px 6px; border-radius: 80px;
+  background: var(--c11); border: .5px solid var(--c11); color: var(--c2);
+  font: inherit; font-size: 12px; line-height: 20px; font-weight: 400; letter-spacing: 0;
+  transition: transform .1s ease, opacity .1s ease;
+}
+.bncm-sim-playall svg { font-size: 12px; margin-bottom: 1px; }
+.bncm-sim-playall span { margin-left: 2px; }
+.bncm-sim-playall:hover { color: var(--c1); background: var(--c10); border-color: var(--c10); }
+.bncm-sim-playall:active { opacity: .6; transform: scale(.96); }
+
+.bncm-sim-list { margin: 0 -20px; display: flex; flex-direction: column; }
+.bncm-sim-row {
+  height: 64px; flex: none; display: flex; align-items: center; box-sizing: border-box;
+  padding: 0 36px 0 20px;
+}
+.bncm-sim-row:hover { background: var(--c10); box-shadow: rgba(40, 50, 72, .04) 0 6px 16px; }
+.bncm-sim-cover { position: relative; width: 48px; height: 48px; border-radius: 8px; overflow: hidden; flex: none; margin-right: 10px; }
+.bncm-sim-cover img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 8px; box-shadow: 0 0 1px 1px var(--c11); background: var(--c11); }
+.bncm-sim-coverplay {
+  position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .25); color: var(--c2); font-size: 20px;
+}
+.bncm-sim-row:hover .bncm-sim-coverplay { display: flex; }
+.bncm-sim-coverplay svg + svg, .bncm-sim-row.current:not(.paused) .bncm-sim-coverplay svg:first-child { display: none; }
+.bncm-sim-row.current:not(.paused) .bncm-sim-coverplay svg + svg { display: block; }
+
+.bncm-sim-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bncm-sim-title { display: flex; align-items: center; overflow: hidden; font-size: 14px; line-height: 19.6px; color: var(--c2); }
+.bncm-sim-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bncm-sim-alias { color: var(--c5); }
+.bncm-sim-row.nocopy .bncm-sim-name { color: var(--c7); }
+.bncm-sim-explicit { flex: none; margin: 1px 0 0 4px; font-size: 12px; color: var(--c2); }
+.bncm-sim-sub { margin-top: 2px; display: flex; align-items: center; overflow: hidden; height: 18.2px; font-size: 13px; line-height: 18.2px; }
+.bncm-sim-tags { display: inline-flex; align-items: center; flex: none; margin: 0 4px 1px 0; }
+/* NCM's small tag: a 13px box with a half-pixel outline in the text colour at 0.4 */
+.bncm-sim-tag {
+  position: relative; display: inline-flex; align-items: center; height: 13px; padding: 0 2px; margin: 1px 2px 0 0;
+  border-radius: 3px; font-size: 8px; line-height: 13px; font-weight: 400; white-space: nowrap; letter-spacing: 0;
+  color: rgb(211, 160, 59);
+}
+.bncm-sim-tag::after {
+  content: ""; position: absolute; inset: 0; border: .5px solid currentColor; border-radius: 3px; opacity: .4; pointer-events: none;
+}
+.bncm-sim-tag.vip, .bncm-sim-tag.trial, .bncm-sim-tag.free, .bncm-sim-tag.mv { color: rgb(255, 58, 58); }
+.bncm-sim-tag.nosrc { color: rgb(94, 124, 189); }
+.bncm-sim-tag.mv svg { width: 6px; height: 6px; }
+.bncm-sim-tag.mv:hover { background: rgba(255, 58, 58, .08); }
+.bncm-sim-tagnote { margin-right: 4px; color: var(--c5); font-size: 12px; white-space: nowrap; }
+.bncm-sim-artists { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c1); }
+.bncm-sim-artists a { color: var(--c5); }
+.bncm-sim-artists a:hover { color: var(--c4); }
+
+/* hover tools: 下载 / 喜欢 / 收藏 / 更多 */
+.bncm-sim-extra { flex: none; padding-left: 10px; }
+.bncm-sim-tools { display: none; align-items: center; gap: 10px; }
+.bncm-sim-row:hover .bncm-sim-tools { display: inline-flex; }
+.bncm-sim-tools button {
+  width: 20px; height: 28px; padding: 0; border: 0; background: none; display: flex; align-items: center; justify-content: center;
+  color: var(--c5); font-size: 20px;
+}
+.bncm-sim-tools button:first-child { height: 20px; }
+.bncm-sim-tools button:hover { color: var(--c2); }
+.bncm-sim-tools button svg + svg, .bncm-sim-tools button.liked svg:first-child { display: none; }
+.bncm-sim-tools button.liked svg + svg { display: block; width: 23px; height: 23px; flex: none; color: var(--liked); }

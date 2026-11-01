@@ -1,0 +1,125 @@
+// 百科 / 相似推荐 / 评论: views that take the lyric column's place (compat-rnp-panels.js put NCM's own
+// pages there; here they are rebuilt from the same data). Each panel module registers itself:
+//   registerPanel(id, { mount(el), show(track), hide() })
+// mount runs once with the panel's own container; show runs whenever the panel is shown or the track
+// changes while it shows; hide when another view takes over.
+import { state, set, watch } from '../state.js';
+
+const panels = new Map(); // id -> {def, el, mounted}
+const cssLoaded = new Set();
+/** Load a panel's stylesheet once (css/panel-<id>.css). */
+export function loadCss(href) {
+  if (cssLoaded.has(href)) return;
+  cssLoaded.add(href);
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = href;
+  document.head.append(l);
+}
+let host = null; // the panel area over the lyric column
+let current = 'lyrics';
+const MODULES = { baike: './baike.js', similar: './similar.js', comment: './comment.js' };
+
+export function registerPanel(id, def) {
+  panels.set(id, { def, el: null, mounted: false });
+}
+
+function ensureHost() {
+  if (host) return host;
+  host = document.createElement('div');
+  host.className = 'bncm-panel-host';
+  // on <body>: inside RNPN's .lyric (will-change: transform) a fixed box would be placed relative to it
+  document.body.append(host);
+  return host;
+}
+
+/** The lyric column's box minus RNPN's 30px padding, below the top-right controls (as compat-rnp-panels.js). */
+export function placeHost() {
+  if (!host) return;
+  const lyrics = document.querySelector('#rnp-view .rnp-lyrics');
+  const col = document.querySelector('#rnp-view .lyric');
+  if (!lyrics || !col) return;
+  const r = lyrics.getBoundingClientRect();
+  const TOP_CLEAR = 56;
+  const top = Math.max(r.top, TOP_CLEAR);
+  host.style.setProperty('--bncm-panel-left', `${r.left + 30}px`);
+  host.style.setProperty('--bncm-panel-top', `${top}px`);
+  host.style.setProperty('--bncm-panel-width', `${Math.max(0, r.width - 60)}px`);
+  host.style.setProperty('--bncm-panel-height', `${Math.max(0, r.bottom - top)}px`);
+}
+
+export async function showView(view) {
+  if (view !== 'lyrics' && !MODULES[view]) view = 'lyrics';
+  const prev = current;
+  current = view;
+  document.body.dataset.bncmView = view;
+  if (prev !== 'lyrics' && prev !== view) panels.get(prev)?.def.hide?.();
+  if (view === 'lyrics') { host?.classList.remove('shown'); return; }
+  ensureHost();
+  placeHost();
+  if (!panels.has(view)) {
+    try { await import(MODULES[view]); } catch (e) { console.error('panel failed to load', view, e); set('view', 'lyrics'); return; }
+  }
+  if (current !== view) return;
+  const p = panels.get(view);
+  if (!p) { set('view', 'lyrics'); return; }
+  if (!p.mounted) {
+    p.el = document.createElement('div');
+    p.el.className = `bncm-panel bncm-panel-${view}`;
+    host.append(p.el);
+    p.def.mount(p.el);
+    p.mounted = true;
+  }
+  for (const [id, q] of panels) q.el?.classList.toggle('active', id === view);
+  host.classList.add('shown');
+  p.def.show(state.track);
+}
+
+watch('track', (t, old) => {
+  if (current === 'lyrics' || !t || (old && t.id === old.id)) return;
+  // a song without comments (local, no thread) or with no 百科 etc.: the panel shows its empty state
+  panels.get(current)?.def.show(t);
+});
+watch('window', () => placeHost());
+window.addEventListener('resize', () => placeHost());
+
+// --- wheel gestures (compat-rnp-panels.js onWheel / onPanelWheel) ------------------------------
+// Scrolling down on the cover side opens the comments; in the comments, a new upward gesture that
+// starts with the list at its top goes back to the lyrics (a trackpad's momentum does not count).
+const WHEEL_TO_COMMENTS = 160;
+const WHEEL_RESET_MS = 400;
+const GESTURE_GAP_MS = 250;
+const BACK_TO_LYRICS = 240;
+let wheelSum = 0;
+let wheelTimer = 0;
+let lastPanelWheel = -Infinity;
+let gestureAtTop = false;
+let upSum = 0;
+
+function commentsAvailable() {
+  const t = state.track;
+  return !!(t && t.id && !t.local && t.threadId);
+}
+
+document.addEventListener('wheel', (e) => {
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t) return;
+  if (current === 'lyrics') {
+    if (e.deltaY <= 0 || t.closest('.rnp-lyrics, .bncm-settings, .rnp-window-topbar, .bncm-menu')) return;
+    const lyrics = document.querySelector('#rnp-view .rnp-lyrics')?.getBoundingClientRect();
+    if (!lyrics?.width || e.clientX >= lyrics.left || !commentsAvailable()) return;
+    wheelSum += e.deltaY;
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => { wheelSum = 0; }, WHEEL_RESET_MS);
+    if (wheelSum >= WHEEL_TO_COMMENTS) { wheelSum = 0; set('view', 'comment'); }
+    return;
+  }
+  if (current !== 'comment' || !t.closest('.bncm-panel-comment')) return;
+  const list = document.querySelector('.bncm-panel-comment .bncm-scroll');
+  const now = performance.now();
+  if (now - lastPanelWheel > GESTURE_GAP_MS) { gestureAtTop = !!list && list.scrollTop <= 0; upSum = 0; }
+  lastPanelWheel = now;
+  if (!gestureAtTop || e.deltaY >= 0) { if (e.deltaY > 0) gestureAtTop = false; return; }
+  upSum -= e.deltaY;
+  if (upSum >= BACK_TO_LYRICS) { upSum = 0; gestureAtTop = false; set('view', 'lyrics'); }
+}, { passive: true });

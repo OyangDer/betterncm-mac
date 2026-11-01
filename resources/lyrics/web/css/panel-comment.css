@@ -1,0 +1,135 @@
+/* 评论 (js/panels/comment.js): NCM's CommentAreaContainer / CommentCardWrapper as they render in
+   the panel (bspec panels-visual.md §3). Colours are the panel palette (panels.css): FG at NCM's
+   alphas, the nickname and links at .72 as compat-rnp-panels.js forces them. */
+.bncm-panel-comment .bncm-cm-scroll {
+  box-sizing: border-box; padding: 0 0 112px; gap: 20px;
+  font-size: 12px; line-height: 16.8px;
+}
+.bncm-panel-comment .bncm-cm-scroll > * { flex: none; }
+
+/* 全部评论 / 最新评论 with the count as a superscript */
+.bncm-cm-head { font-size: 16px; line-height: 22px; font-weight: 600; color: var(--c1); margin-bottom: -19px; }
+.bncm-cm-head .num { font-size: 11px; line-height: 13px; font-weight: 600; margin-left: 2px; vertical-align: top; }
+.bncm-cm-lists .bncm-cm-head { margin-bottom: 0; }
+
+/* card */
+.bncm-cm-card { display: flex; padding: 19px 0 17px; border-bottom: 1px solid var(--c11); }
+.bncm-cm-avatar { position: relative; flex: none; width: 40px; height: 40px; }
+.bncm-cm-avatar .img { display: block; width: 40px; height: 40px; border-radius: 40px; background: var(--c12); object-fit: cover; }
+.bncm-cm-avatar .border { position: absolute; inset: 0; z-index: 1; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--c11); pointer-events: none; }
+.bncm-cm-avatar .pendant { position: absolute; z-index: 2; left: -10px; bottom: -10px; width: 60px; height: 60px; pointer-events: none; }
+.bncm-cm-avatar .identity { position: absolute; z-index: 3; right: -1px; bottom: 1px; width: 12px; height: 12px; pointer-events: none; }
+.bncm-cm-body { flex: 1; width: 0; margin-left: 12px; }
+.bncm-cm-nick {
+  display: flex; align-items: center; gap: 4px; height: 20px; margin-bottom: 6px;
+  font-size: 15px; line-height: 20px; color: rgba(var(--fg), .72); word-break: break-word;
+}
+.bncm-cm-nick .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bncm-cm-nick .badge { display: block; flex: none; height: 16px; }
+.bncm-cm-nick .badge.auto { width: auto; }
+.bncm-cm-text { font-size: 15px; line-height: 24px; color: var(--c2); white-space: pre-wrap; word-break: break-word; }
+.bncm-cm-emoji { display: inline-block; width: 20px; height: 20px; vertical-align: middle; box-shadow: 0 0 1px 1px var(--c11); }
+.bncm-cm-replied {
+  margin: 6px 40px 3px 0; padding-left: 7px; border-left: 1px solid var(--c10);
+  font-size: 14px; line-height: 20px; color: var(--c5); white-space: pre-wrap; word-break: break-word;
+}
+.bncm-cm-at, .bncm-cm-topic, .bncm-cm-url { color: rgba(var(--fg), .72); }
+.bncm-cm-url svg { display: inline-block; position: relative; top: 2px; margin-right: 1px; }
+
+.bncm-cm-foot { display: flex; align-items: flex-end; justify-content: space-between; }
+.bncm-cm-time { font-size: 12px; line-height: 16.8px; color: var(--c7); }
+.bncm-cm-ops { display: flex; align-items: center; gap: 12px; }
+.bncm-cm-like { display: flex; align-items: center; }
+.bncm-cm-like .num { margin-right: 4px; font-size: 12px; line-height: 16.8px; color: var(--c5); }
+.bncm-cm-like .num.liked { color: var(--liked); }
+.bncm-cm-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 28px;
+  margin: 0; padding: 0; border: 0; background: none; font: inherit; font-size: 20px; color: var(--c5);
+}
+.bncm-cm-icon:hover { color: var(--c2); }
+.bncm-cm-icon.liked, .bncm-cm-icon.liked:hover { color: var(--liked); }
+.bncm-cm-icon.last { margin-left: 12px; }
+.bncm-cm-icon:active, .bncm-cm-more-btn:active { opacity: .6; transform: scale(.96); }
+
+/* 查看更多精彩评论 (an empty box without more hot comments still keeps its margins) */
+.bncm-cm-more { display: flex; justify-content: center; margin: 20px 0 40px; line-height: 13px; }
+.bncm-cm-more-btn {
+  display: inline-flex; align-items: center; height: 18px; margin: 0; padding: 0 4px 0 8px; border: 0; border-radius: 10px;
+  background: none; font: inherit; font-size: 13px; line-height: 13px; color: var(--c5);
+}
+.bncm-cm-more-btn:hover { color: var(--c2); }
+.bncm-cm-more-btn svg { font-size: 13px; }
+
+/* next page */
+.bncm-cm-sentinel { display: flex; align-items: center; justify-content: center; min-height: 40px; color: var(--c7); }
+.bncm-cm-sentinel[data-act]:hover { color: var(--c5); }
+.bncm-cm-spin {
+  width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid var(--c10); border-top-color: var(--c5);
+  animation: bncm-cm-spin .8s linear infinite;
+}
+@keyframes bncm-cm-spin { to { transform: rotate(360deg); } }
+
+/* loading */
+.bncm-cm-skeleton { display: flex; flex-direction: column; gap: 40px; margin: 19px 0 0; padding: 0; list-style: none; }
+.bncm-cm-skeleton li { display: flex; gap: 12px; }
+.bncm-cm-skeleton .sk { background: var(--c12); border-radius: 6px; }
+.bncm-cm-skeleton .left { flex: none; width: 48px; height: 48px; }
+.bncm-cm-skeleton .right { display: flex; flex: 1; flex-direction: column; gap: 12px; }
+.bncm-cm-skeleton .msg { width: 100%; height: 24px; }
+.bncm-cm-skeleton .time { width: 210px; height: 12px; border-radius: 4px; }
+
+/* empty / not online / failed */
+.bncm-panel-comment .bncm-cm-scroll > .bncm-cm-empty,
+.bncm-panel-comment .bncm-cm-scroll > .bncm-cm-error { flex: 1 0 auto; }
+.bncm-cm-empty, .bncm-cm-error {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  color: var(--c6);
+}
+.bncm-cm-empty { margin: -45px 0 0 -14px; }
+.bncm-cm-empty .pic { display: block; width: 180px; height: 180px; }
+.bncm-cm-empty .title { margin-top: 8px; font-size: 14px; line-height: 20px; }
+.bncm-cm-empty .desc, .bncm-cm-error .desc { margin-top: 4px; font-size: 13px; line-height: 18px; }
+.bncm-cm-retry {
+  margin-top: 16px; height: 28px; padding: 0 16px; border: .5px solid var(--c9); border-radius: 14px;
+  background: none; font: inherit; font-size: 12px; color: var(--c4);
+}
+.bncm-cm-retry:hover { background: var(--c11); color: var(--c2); }
+
+/* 发布评论: floats over the list's bottom fade */
+.bncm-cm-publish { position: absolute; z-index: 2; left: 50%; bottom: 52px; display: flex; transform: translateX(-50%); }
+.bncm-panel-comment.no-thread .bncm-cm-publish { display: none; }
+.bncm-cm-publish-btn {
+  display: flex; align-items: center; height: 40px; margin: 0; padding: 0 32px; white-space: nowrap;
+  border: .5px solid rgba(var(--fg), .2); border-radius: 999px;
+  background: rgba(var(--rnp-accent-color-bg-rgb, 40, 40, 46), .86);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+  font: inherit; font-size: 16px; line-height: 22.4px; font-weight: 400; color: var(--c1);
+  transition: transform .1s ease;
+}
+.bncm-cm-publish-btn:active { transform: scale(.96); }
+.bncm-cm-publish-btn .icon { display: flex; font-size: 22px; }
+.bncm-cm-publish-btn .icon + span { margin-left: 2px; }
+
+/* the share sheet over the share button */
+.bncm-cm-share {
+  position: absolute; z-index: 3; width: 178px; padding: 4px 0; box-sizing: border-box;
+  border: .5px solid rgba(var(--fg), .12); border-radius: 8px;
+  background: rgb(var(--rnp-accent-color-bg-rgb, 40, 40, 46));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+  opacity: 0; visibility: hidden; transform: translateY(4px);
+  transition: opacity .15s ease, transform .15s ease, visibility 0s linear .15s;
+}
+.bncm-cm-share.shown { opacity: 1; visibility: visible; transform: none; transition: opacity .15s ease, transform .15s ease; }
+.bncm-cm-share-row { display: flex; align-items: center; gap: 8px; height: 44px; padding: 8px 12px; box-sizing: border-box; }
+.bncm-cm-share-row:hover { background: var(--c11); }
+.bncm-cm-share-row svg { flex: none; }
+.bncm-cm-share-row .text { font-size: 12px; line-height: 14px; color: var(--c4); }
+
+.bncm-cm-toast {
+  position: absolute; z-index: 4; left: 50%; top: 40%; transform: translateX(-50%);
+  padding: 8px 16px; border-radius: 8px; background: rgba(0, 0, 0, .6); color: #fff;
+  font-size: 13px; line-height: 18px; white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity .2s ease;
+}
+.bncm-cm-toast.shown { opacity: 1; }

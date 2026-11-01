@@ -1,0 +1,10 @@
+/* 百科: NCM's BaiKeCard (bspec panels-visual.md §1). NCM's .area.baike-mode keeps 40px free below. */
+.bncm-panel-baike .bncm-scroll { height: calc(100% - 40px); }
+.bncm-baike-card { display: flex; flex-direction: column; gap: 20px; padding: 20px; }
+.bncm-baike-card .bncm-card-title {
+  font-size: 20px; line-height: 24px; font-weight: 600; letter-spacing: .5px; color: var(--c1);
+}
+.bncm-baike-rows { display: flex; flex-direction: column; gap: 14px; }
+.bncm-baike-row { display: flex; gap: 20px; font-size: 16px; line-height: 24px; font-weight: 400; }
+.bncm-baike-label { width: 80px; flex: none; color: var(--c7); }
+.bncm-baike-value { flex: 1; min-width: 0; color: var(--c2); overflow-wrap: anywhere; }
