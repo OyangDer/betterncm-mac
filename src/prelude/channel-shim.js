@@ -137,6 +137,55 @@ function __bncmInstallChannelShim() {
     if (!progressTimer) progressTimer = setTimeout(flushProgress, Math.max(0, interval - (now - progressSentAt)));
   }
 
+  // NCM's own progress listener (its play bar's slider and times) gets the same ~50 events a
+  // second, each re-rendering the play bar, which kept NCM's page producing a frame for nearly
+  // every one: ~27 points of one core while playing, measured on an M5. Its callback in NCM's
+  // seq map is wrapped (on its first event, below) to pass the newest event at most every
+  // NCM_PROGRESS_MS, and every NCM_COVERED_MS while the bar cannot be seen: RefinedNowPlaying's
+  // page covers it, or the window is not drawn. Track changes and seeks pass at once, as for
+  // plugins, so nothing that keys on them waits.
+  const NCM_PROGRESS_MS = 250;
+  const NCM_COVERED_MS = 1000;
+  const RNP_PAGE_OPEN = 'rnp-lyric-page-open';
+  const throttledNcm = new WeakSet();
+
+  function throttleNcmProgress(s) {
+    const entry = callbackMap()?.[s];
+    const orig = entry && entry.callback;
+    if (typeof orig !== 'function' || throttledNcm.has(orig)) return;
+    let sentAt = -Infinity;
+    let pending = null;
+    let timer = 0;
+    let seen = null;
+    const flush = () => {
+      clearTimeout(timer);
+      timer = 0;
+      const args = pending;
+      pending = null;
+      if (!args) return;
+      sentAt = performance.now();
+      orig.apply(window, args);
+    };
+    const wrappedCb = function (...args) {
+      const now = performance.now();
+      const id = String(args[0]);
+      const pos = parseFloat(args[1]);
+      const jump = !seen || seen.id !== id || !Number.isFinite(pos) || !Number.isFinite(seen.pos)
+        || pos < seen.pos - 0.25 || pos > seen.pos + (now - seen.at) / 1000 + 0.75;
+      seen = { id, pos, at: now };
+      const covered = document.body?.classList.contains(RNP_PAGE_OPEN) || !isDrawn(now);
+      const interval = covered ? NCM_COVERED_MS : NCM_PROGRESS_MS;
+      pending = args;
+      if (jump || now - sentAt >= interval) {
+        flush();
+        return;
+      }
+      if (!timer) timer = setTimeout(flush, Math.max(0, interval - (now - sentAt)));
+    };
+    throttledNcm.add(wrappedCb);
+    entry.callback = wrappedCb;
+  }
+
   // macOS sends onPlayState as [id, "id|pause|RANDOM", 2]; plugins written for Windows take the
   // last "|" segment as the state (RefinedNowPlaying: .split("|").pop()), so drop the suffix.
   const PLAY_STATE = 'audioplayer.onPlayState';
@@ -184,6 +233,9 @@ function __bncmInstallChannelShim() {
       }
       const command = commandOf[s];
       if (!command || String(s).startsWith(SEQ_PREFIX) || latestSeq[command] !== s) return;
+      if (command === PROGRESS) {
+        try { throttleNcmProgress(s); } catch { /* NCM keeps its unthrottled events */ }
+      }
       dispatch(command, Array.isArray(args) ? args : []);
     };
     return true;
