@@ -151,6 +151,8 @@ func pruneCache() {
 /// The strip along the top that drags the window (the page itself has nothing there but the tools
 /// on the right, which it keeps).
 final class DragStrip: NSView {
+    // a drag works while another app is active, as on a title bar
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
             let action = UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") ?? "Maximize"
@@ -162,6 +164,12 @@ final class DragStrip: NSView {
     }
 }
 
+/// The first click reaches the page even while NCM (or any other app) is active, as it would in
+/// NCM's own window; by default it would only activate this one.
+final class LyricsWebView: WKWebView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 final class LyricsWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -170,6 +178,9 @@ final class LyricsWindow: NSWindow {
     // Full screen is NCM's (its own Space, as when the lyric page was inside NCM's window); this
     // window lays itself over it instead of taking a Space of its own (Host.ncmFullscreen).
     override func toggleFullScreen(_ sender: Any?) { (NSApp.delegate as? Host)?.requestNcmFullscreen() }
+    /// AppKit's own full screen. It can still be entered from the green button's hover menu, which
+    /// does not go through toggleFullScreen; whatever must leave it calls this.
+    func toggleNativeFullScreen() { super.toggleFullScreen(nil) }
 }
 
 final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate {
@@ -185,9 +196,16 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var ncmFS = false      // NCM is in full screen: this window covers NCM's full-screen Space
     var hiding = false     // "hide" arrived in full screen: order out once full screen is left
     var entering = false   // on its way into full screen
+    var collapsing = false // a collapse to NCM (beginClose), not a minimize or the injector's own hide
+    var pendingFS: Bool?   // asked NCM for this full-screen state, no answer yet
+    var preFSFrame: NSRect? // the windowed frame before the window covered the screen for NCM's full screen
+    var reopenedAt: Date?  // shown again while a collapse was still waiting for its "hide"
+    var reloadDelay: TimeInterval = 1
     var closeTimer: Timer?
     var followTimer: Timer?
     var resizeTimer: Timer?
+    var boundsTimer: Timer?
+    var reloadTimer: Timer?
 
     func applicationDidFinishLaunching(_ n: Notification) {
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
@@ -211,7 +229,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         cfg.setURLSchemeHandler(AssetHandler(), forURLScheme: "bncm")
         cfg.userContentController.add(self, name: "b")
         cfg.suppressesIncrementalRendering = true
-        web = WKWebView(frame: window.contentView!.bounds, configuration: cfg)
+        web = LyricsWebView(frame: window.contentView!.bounds, configuration: cfg)
         web.autoresizingMask = [.width, .height]
         web.navigationDelegate = self
         web.setValue(false, forKey: "drawsBackground")
@@ -300,7 +318,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     // MARK: page messaging
 
     func toWeb(_ msg: [String: Any]) {
-        guard pageReady else { pendingToWeb.append(msg); return }
+        guard pageReady else {
+            pendingToWeb.append(msg)
+            // a page that does not come back must not grow this without end
+            if pendingToWeb.count > 500 { pendingToWeb.removeFirst(pendingToWeb.count - 500) }
+            return
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: msg), let json = String(data: data, encoding: .utf8) else { return }
         web.evaluateJavaScript("window.B && B.receive(\(json))", completionHandler: nil)
     }
@@ -314,6 +337,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         switch op {
         case "ready":
             pageReady = true
+            reloadDelay = 1
             let settings = (try? Data(contentsOf: settingsFile)).flatMap { try? JSONSerialization.jsonObject(with: $0) }
             toWeb(["t": "host.settings", "data": settings ?? NSNull()])
             sendWindowState()
@@ -377,10 +401,17 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     }
 
     func show(frame: [String: Any]?, fullscreen: Bool) {
+        // the "hide" for that collapse may still be on its way (hide)
+        reopenedAt = collapsing ? Date() : nil
         closing = false
         hiding = false
+        collapsing = false
         wantShown = true
         closeTimer?.invalidate()
+        followTimer?.invalidate()
+        boundsTimer?.invalidate()
+        pendingFS = nil
+        if !fullscreen { preFSFrame = nil }
         if NSApp.isHidden { NSApp.unhide(nil) }
         setNcmFS(fullscreen)
         if ncmFS { window.setFrame(fullscreenFrame(frame), display: false) }
@@ -391,7 +422,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     // MARK: NCM's full screen
 
-    static let windowed: NSWindow.CollectionBehavior = [.fullScreenPrimary]
+    // no tiling from the green button's hover menu: that is AppKit's full screen, not NCM's
+    static let windowed: NSWindow.CollectionBehavior = [.fullScreenPrimary, .fullScreenDisallowsTiling]
     // allowed in another app's full-screen Space
     static let overNcm: NSWindow.CollectionBehavior = [.fullScreenAuxiliary]
     // while NCM animates into or out of full screen: on every Space, so it is on top of NCM's at once
@@ -453,17 +485,29 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     /// The green button: NCM goes into (or out of) full screen and the window follows (ncmFullscreen).
     @objc func requestNcmFullscreen() {
+        // in AppKit's own full screen after all (the hover menu): leave it
+        if window.styleMask.contains(.fullScreen) { window.toggleNativeFullScreen(); return }
         guard wantShown, !closing else { return }
+        // from the state already asked for: two toggles before NCM answers go there and back
+        let v = !(pendingFS ?? ncmFS)
+        log("requestNcmFullscreen v \(v)")
+        pendingFS = v
+        boundsTimer?.invalidate()
         window.collectionBehavior = Host.following
         keepAboveNcm(true)
         // cover the screen at once: NCM's own window grows to it under this one
-        if !ncmFS { window.setFrame(screenFrame(), display: true) }
-        emit(["from": "host", "op": "setFullscreen", "v": !ncmFS])
+        if v && !ncmFS {
+            if preFSFrame == nil { preFSFrame = window.frame }
+            window.setFrame(screenFrame(), display: true)
+        }
+        emit(["from": "host", "op": "setFullscreen", "v": v])
         // NCM did not move (e.g. not allowed): settle back
         followTimer?.invalidate()
         followTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
             guard let self, self.window.collectionBehavior == Host.following else { return }
+            self.pendingFS = nil
             self.setNcmFS(self.ncmFS)
+            if !self.ncmFS, let r = self.preFSFrame { self.preFSFrame = nil; self.window.setFrame(r, display: true) }
         }
     }
 
@@ -471,13 +515,67 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func ncmFullscreen(_ v: Bool, frame: [String: Any]?) {
         log("ncmFullscreen \(v) frame \(frame ?? [:]) shown \(wantShown) closing \(closing)")
         followTimer?.invalidate()
+        boundsTimer?.invalidate()
+        pendingFS = nil
+        let saved = preFSFrame
+        if !v { preFSFrame = nil }
         setNcmFS(v)
         guard wantShown, !closing else { return }
         if v { window.setFrame(fullscreenFrame(frame), display: true) }
-        else if let r = cocoaFrame(frame) { window.setFrame(r, display: true) }
+        else {
+            // the frame NCM's page reports is stale: covered by this window, Chromium keeps the
+            // full-screen screenX/outerWidth and fires no resize. Start from the frame before full
+            // screen and take NCM's real one from the window server once it has settled.
+            if let r = saved ?? cocoaFrame(frame) { window.setFrame(r, display: true) }
+            followNcmWindowedFrame()
+        }
         // shown and made key in the Space that is active now: NCM's full-screen one, or the desktop
         showInActiveSpace()
         sendWindowState()
+    }
+
+    /// NCM's main window after it left full screen: polled briefly (it animates) until it is no
+    /// longer screen-sized and the same twice, then the window takes it.
+    func followNcmWindowedFrame() {
+        boundsTimer?.invalidate()
+        var last: NSRect?, ticks = 0
+        boundsTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] t in
+            guard let self, self.wantShown, !self.closing, !self.ncmFS, ticks < 17 else { t.invalidate(); return }
+            ticks += 1
+            let r = self.ncmMainWindowFrame()
+            if let r, !self.isFullScreenSize(r), r == last {
+                t.invalidate()
+                if r != self.window.frame { self.window.setFrame(r, display: true) }
+                return
+            }
+            last = r
+        }
+    }
+
+    /// NCM's main window (layer 0, on screen, player-sized, the largest) as the window server has
+    /// it, in Cocoa coordinates.
+    func ncmMainWindowFrame() -> NSRect? {
+        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: NCM_BUNDLE_ID).first?.processIdentifier,
+              let primary = NSScreen.screens.first,
+              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+        else { return nil }
+        let rects = list.compactMap { w -> CGRect? in
+            guard (w[kCGWindowOwnerPID as String] as? Int32) == pid, (w[kCGWindowLayer as String] as? Int) == 0,
+                  let b = w[kCGWindowBounds as String] as? NSDictionary, let r = CGRect(dictionaryRepresentation: b as CFDictionary),
+                  r.width >= 600, r.height >= 400 else { return nil }
+            return r
+        }
+        guard let r = rects.max(by: { $0.width * $0.height < $1.width * $1.height }) else { return nil }
+        return NSRect(x: r.minX, y: primary.frame.maxY - r.minY - r.height, width: r.width, height: r.height)
+    }
+
+    /// The size of a full-screen window on some screen (with or without a notched display's menu bar).
+    func isFullScreenSize(_ r: NSRect) -> Bool {
+        NSScreen.screens.contains { sc in
+            var top: CGFloat = 0
+            if #available(macOS 12.0, *) { top = sc.safeAreaInsets.top }
+            return abs(r.width - sc.frame.width) < 1 && (abs(r.height - sc.frame.height) < 1 || abs(r.height - (sc.frame.height - top)) < 1)
+        }
     }
 
     func beginClose() {
@@ -485,10 +583,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         if window.styleMask.contains(.fullScreen) {
             // leave full screen first, then hand NCM the windowed frame
             closing = true
-            window.toggleFullScreen(nil)
+            window.toggleNativeFullScreen()
             return
         }
         closing = true
+        collapsing = true
+        reopenedAt = nil
         let f = window.frame
         // winhelper.setWindowPosition takes a bottom-left origin, Cocoa's
         emit(["from": "host", "op": "closing", "frame": topLeftFrame(),
@@ -500,10 +600,16 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     /// The injector's "hide". A window in full screen leaves it first, as in beginClose, or its Space
     /// would stay behind empty.
     func hide() {
+        // late, for a collapse before the window was opened again: ignored once, and only soon after
+        // (any other "hide", e.g. an open NCM's page could not be told about, still closes it)
+        if !closing, wantShown, let t = reopenedAt {
+            reopenedAt = nil
+            if -t.timeIntervalSinceNow < 6 { log("stale hide ignored"); return }
+        }
         if entering { hiding = true; return } // windowDidEnterFullScreen leaves it again
         if window.styleMask.contains(.fullScreen) {
             hiding = true
-            if !closing { closing = true; window.toggleFullScreen(nil) } // else beginClose is already leaving it
+            if !closing { closing = true; window.toggleNativeFullScreen() } // else beginClose is already leaving it
             return
         }
         finishClose()
@@ -511,17 +617,30 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     func finishClose() {
         closeTimer?.invalidate()
+        followTimer?.invalidate()
+        boundsTimer?.invalidate()
+        pendingFS = nil
+        if window.collectionBehavior == Host.following { window.collectionBehavior = ncmFS ? Host.overNcm : Host.windowed }
+        let collapse = collapsing
+        collapsing = false
+        reopenedAt = nil
         wantShown = false
         window.level = .normal
         guard window.isVisible else { closing = false; return }
         window.orderOut(nil)
         closing = false
         sendWindowState()
+        // NCM is in front now: give it the keys and its first click, or this app stays active with no window
+        if collapse, NSApp.isActive { NSRunningApplication.runningApplications(withBundleIdentifier: NCM_BUNDLE_ID).first?.activate(options: []) }
     }
 
     @objc func minimizeBoth() {
         // like the yellow button, which full screen disables: ordering out would leave an empty Space
-        guard !window.styleMask.contains(.fullScreen), !ncmFS else { return }
+        // nor while NCM is on its way into or out of full screen
+        guard !window.styleMask.contains(.fullScreen), !ncmFS, window.collectionBehavior != Host.following else { return }
+        followTimer?.invalidate()
+        boundsTimer?.invalidate()
+        pendingFS = nil
         // the frame NCM takes before it is minimized, as with "closing"
         let f = window.frame
         wantShown = false
@@ -604,7 +723,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func windowDidEnterFullScreen(_ n: Notification) {
         entering = false
         sendWindowState()
-        if hiding { closing = true; window.toggleFullScreen(nil) } // "hide" came while entering
+        if hiding { closing = true; window.toggleNativeFullScreen() } // "hide" came while entering
     }
 
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
@@ -631,6 +750,26 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { log("page loaded") }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        reloadLater("page failed to load: \(error.localizedDescription)", error)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        reloadLater("page failed: \(error.localizedDescription)", error)
+    }
+
+    /// A failed load of our page: try again a little later, backing off while it keeps failing.
+    func reloadLater(_ why: String, _ error: Error) {
+        let e = error as NSError
+        // superseded by another load, or a navigation the policy above refused
+        if (e.domain == NSURLErrorDomain && e.code == NSURLErrorCancelled) || (e.domain == "WebKitErrorDomain" && e.code == 102) { return }
+        log(why)
+        guard reloadTimer?.isValid != true else { return }
+        let delay = reloadDelay
+        reloadDelay = min(reloadDelay * 2, 30)
+        reloadTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in self?.reloadPage("load failed") }
+    }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         reloadPage("web content process terminated")
