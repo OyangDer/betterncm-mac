@@ -48,6 +48,7 @@ Every message is one JSON object.
 | `progress` | `id`, `pos` (s), `wall` (`Date.now()`) | Every 250 ms while active, and at once on a jump. |
 | `liked` / `mode` / `volume` / `roaming` | `v` (`roaming` also has `icon`, NCM's dislike SVG) | Changed. |
 | `reply` | `rid`, `ok`, `data` or `error` | Answer to a page request (`fetch`, `rnpSettings`, …). |
+| `fullscreen` | `v`, `frame` | NCM entered or left full screen (sent once its window has settled). The injector hands it to the host as `ncmFullscreen`, not to the page. |
 
 ### Page → bridge (`c`)
 
@@ -55,7 +56,8 @@ Every message is one JSON object.
 `visibilitychange` while the window is shown: with `v` false the window is covered or the screen is
 locked, so progress waits; back to true, a forced progress catches the page up; `active` resets it
 to true), `toggle`, `prev`, `next`, `seek{sec}`, `volume{v}`, `like`, `mode`, `playlist`, `dislike`,
-`nav{hash}` (navigate NCM, used with `close`), `fetch{rid,url}` (GET from NCM's page with its
+`nav{hash}` (navigate NCM, used with `close`), `setFullscreen{v}` (from the injector: NCM's
+`winhelper.setWindowFullScreen`), `fetch{rid,url}` (GET from NCM's page with its
 cookies; music.163.com and interface*.music.163.com only), `rnpSettings{rid}` (RNPN's localStorage,
 for a one-time migration), `ncmAction{rid,action,...}` (panel and menu actions handed to NCM),
 `showNcm{frame,cocoa}` (move NCM's window to the frame and bring it to the front),
@@ -110,12 +112,14 @@ Host to page (`t` starting with `host.`):
 Host stdin:
 - `{to:"web", msg}`
 - `{to:"host", op:"show", frame, fullscreen}`
-- `{to:"host", op:"hide"}`: a window in full screen leaves it first, so no empty Space is left.
+- `{to:"host", op:"hide"}`
+- `{to:"host", op:"ncmFullscreen", v, frame}`: NCM entered or left full screen; the window follows.
 
 Host stdout:
 - `{from:"web", msg}`: the injector sends `msg` to the bridge when it has `c`.
 - `{from:"host", op:"closing", frame, cocoa}`: the injector runs `showNcm` and then sends `hide`.
 - `{from:"host", op:"minimizing", frame, cocoa}`: the injector runs `minimizeNcm` with the frame.
+- `{from:"host", op:"setFullscreen", v}`: the green button or ⌃⌘F; the injector has NCM do it.
 - `{from:"host", op:"log", msg}`
 
 `frame` is `{x, y, w, h}` in points with a top-left origin on the primary screen, which is what NCM's
@@ -140,7 +144,13 @@ it); the next `hello` pre-warms a new one. When the injector shuts down it first
   lyric window's frame and brought to the front, then the lyric window hides.
 - **The yellow button** (and a double-click on the top strip when the system's title-bar double-click
   is set to Minimize) collapses and minimizes NCM: NCM is moved to the lyric window's frame, without
-  being raised, and minimized. Full screen disables it, as for any window.
+  being raised, and minimized. Full screen disables it.
+- **Full screen is NCM's**, as when the lyric page was inside NCM's window. The green button and ⌃⌘F
+  put NCM into (or out of) full screen; the window covers the screen meanwhile and joins every Space,
+  so it stays on top of NCM's while NCM animates. Once NCM reports full screen, the window is shown in
+  the active Space (NCM's full-screen one) as a full-screen auxiliary window and pinned there. So a
+  Dock click on NCM lands on the lyrics, the desktop does not get them, and a collapse shows NCM's
+  full-screen window. Over a full screen the traffic lights and the drag strip are hidden; ⌃⌘F leaves.
 - **NCM activated from the Dock or ⌘Tab while the lyric window is open.** The lyric window is
   ordered back above NCM.
 - **Background.** The blurred background is rendered by the host once per cover, size and scheme,

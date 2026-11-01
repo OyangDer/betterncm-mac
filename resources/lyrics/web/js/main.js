@@ -109,6 +109,10 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'w' && e.metaKey) {
     collapse();
     e.preventDefault();
+  } else if (e.code === 'KeyF' && e.metaKey && e.ctrlKey) {
+    // ⌃⌘F, macOS's full screen: NCM's, which the window follows (the host)
+    host('toggleFullscreen');
+    e.preventDefault();
   } else if (e.key === ' ' && !e.metaKey && !e.ctrlKey) {
     send('toggle');
     e.preventDefault();

@@ -167,6 +167,9 @@ final class LyricsWindow: NSWindow {
     override var canBecomeMain: Bool { true }
     // Exactly NCM's frame, which may reach under the Dock; AppKit would pull a titled window up.
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+    // Full screen is NCM's (its own Space, as when the lyric page was inside NCM's window); this
+    // window lays itself over it instead of taking a Space of its own (Host.ncmFullscreen).
+    override func toggleFullScreen(_ sender: Any?) { (NSApp.delegate as? Host)?.requestNcmFullscreen() }
 }
 
 final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate {
@@ -179,10 +182,11 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var lastBg: BgParams?
     var closing = false
     var wantShown = false  // between the injector's "show" and a close or minimize
-    var refocusAfterUnhide = false // full screen just ended: NCM, shown again, takes the focus back
+    var ncmFS = false      // NCM is in full screen: this window covers NCM's full-screen Space
     var hiding = false     // "hide" arrived in full screen: order out once full screen is left
     var entering = false   // on its way into full screen
     var closeTimer: Timer?
+    var followTimer: Timer?
     var resizeTimer: Timer?
 
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -200,9 +204,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         window.minSize = NSSize(width: 900, height: 600)
         window.backgroundColor = NSColor(white: 0.2, alpha: 1) // RNPN's #333 until the page paints
         window.delegate = self
-        window.collectionBehavior = [.fullScreenPrimary]
+        window.collectionBehavior = Host.windowed
         window.standardWindowButton(.miniaturizeButton)?.target = self
         window.standardWindowButton(.miniaturizeButton)?.action = #selector(minimizeBoth)
+        // the green button, also as a zoom button while the window lies over NCM's full screen
+        window.standardWindowButton(.zoomButton)?.target = self
+        window.standardWindowButton(.zoomButton)?.action = #selector(requestNcmFullscreen)
 
         let cfg = WKWebViewConfiguration()
         cfg.setURLSchemeHandler(AssetHandler(), forURLScheme: "bncm")
@@ -262,7 +269,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         guard m["to"] as? String == "host" else { return }
         switch m["op"] as? String {
         case "show": show(frame: m["frame"] as? [String: Any], fullscreen: m["fullscreen"] as? Bool ?? false)
-        case "hide": refocusAfterUnhide = false; hide()
+        case "hide": hide()
+        case "ncmFullscreen": ncmFullscreen(m["v"] as? Bool ?? false, frame: m["frame"] as? [String: Any])
         case "snapshot":
             // development: a PNG of the page at the window's backing scale
             let id = m["id"] ?? 0
@@ -317,6 +325,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             pendingToWeb = []
             queued.forEach(toWeb)
         case "close": beginClose()
+        case "toggleFullscreen": requestNcmFullscreen()
         case "minimize": minimizeBoth()
         case "cover":
             let p = BgParams(url: m["url"] as? String ?? "", dim: m["dim"] as? Double ?? 0.55,
@@ -375,21 +384,79 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         closing = false
         hiding = false
         wantShown = true
-        refocusAfterUnhide = false
         closeTimer?.invalidate()
         if NSApp.isHidden { NSApp.unhide(nil) }
-        if !window.isVisible, let r = cocoaFrame(frame) { window.setFrame(r, display: false) }
+        setNcmFS(fullscreen)
+        if ncmFS { window.setFrame(screenFrame(), display: false) }
+        else if !window.isVisible, let r = cocoaFrame(frame) { window.setFrame(r, display: false) }
+        showInActiveSpace()
+        sendWindowState()
+    }
+
+    // MARK: NCM's full screen
+
+    static let windowed: NSWindow.CollectionBehavior = [.fullScreenPrimary]
+    // allowed in another app's full-screen Space
+    static let overNcm: NSWindow.CollectionBehavior = [.fullScreenAuxiliary]
+    // while NCM animates into or out of full screen: on every Space, so it is on top of NCM's at once
+    static let following: NSWindow.CollectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
+
+    func screenFrame() -> NSRect { (window.screen ?? NSScreen.main)?.frame ?? window.frame }
+
+    /// Shows the window, key, in the Space that is active now (NCM's full-screen one when NCM is in
+    /// full screen), then pins it there: with .moveToActiveSpace left on it would follow the user to
+    /// any Space where it is activated, and leave NCM's full screen without its lyric page.
+    func showInActiveSpace() {
+        let base = ncmFS ? Host.overNcm : Host.windowed
+        window.collectionBehavior = base.union(.moveToActiveSpace)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         keepAboveNcm(true)
-        if fullscreen && !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.window.collectionBehavior == base.union(.moveToActiveSpace) else { return }
+            self.window.collectionBehavior = base
+        }
+    }
+
+    func setNcmFS(_ v: Bool) {
+        ncmFS = v
+        window.collectionBehavior = v ? Host.overNcm : Host.windowed
+        strip.isHidden = v // nothing to drag over a full screen
+        // as in native full screen: the auto-hidden menu bar would slide over them anyway; ⌃⌘F leaves,
+        // and a collapse shows NCM's full-screen window
+        for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { window.standardWindowButton(b)?.isHidden = v }
+    }
+
+    /// The green button: NCM goes into (or out of) full screen and the window follows (ncmFullscreen).
+    @objc func requestNcmFullscreen() {
+        guard wantShown, !closing else { return }
+        window.collectionBehavior = Host.following
+        keepAboveNcm(true)
+        // cover the screen at once: NCM's own window grows to it under this one
+        if !ncmFS { window.setFrame(screenFrame(), display: true) }
+        emit(["from": "host", "op": "setFullscreen", "v": !ncmFS])
+        // NCM did not move (e.g. not allowed): settle back
+        followTimer?.invalidate()
+        followTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
+            guard let self, self.window.collectionBehavior == Host.following else { return }
+            self.setNcmFS(self.ncmFS)
+        }
+    }
+
+    /// NCM entered or left full screen (the injector's "ncmFullscreen", NCM's new frame with it).
+    func ncmFullscreen(_ v: Bool, frame: [String: Any]?) {
+        followTimer?.invalidate()
+        setNcmFS(v)
+        guard wantShown, !closing else { return }
+        if v { window.setFrame(screenFrame(), display: true) }
+        else if let r = cocoaFrame(frame) { window.setFrame(r, display: true) }
+        // shown and made key in the Space that is active now: NCM's full-screen one, or the desktop
+        showInActiveSpace()
         sendWindowState()
     }
 
     func beginClose() {
         guard window.isVisible, !closing else { return }
-        refocusAfterUnhide = false
-        if entering { closing = true; return } // windowDidEnterFullScreen leaves it again
         if window.styleMask.contains(.fullScreen) {
             // leave full screen first, then hand NCM the windowed frame
             closing = true
@@ -429,7 +496,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     @objc func minimizeBoth() {
         // like the yellow button, which full screen disables: ordering out would leave an empty Space
-        guard !window.styleMask.contains(.fullScreen) else { return }
+        guard !window.styleMask.contains(.fullScreen), !ncmFS else { return }
         // the frame NCM takes before it is minimized, as with "closing"
         let f = window.frame
         wantShown = false
@@ -442,27 +509,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     @objc func appActivated(_ n: Notification) {
         guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-        let isNcm = app.bundleIdentifier == NCM_BUNDLE_ID
-        if isNcm, wantShown, !closing, window.styleMask.contains(.fullScreen) {
-            // A Dock click shows NCM's hidden window again (just after the activation): hide it again
-            // and go back to this window's full-screen Space, which is where NCM's player is now. Other
-            // activations (NCM's menus in the menu bar, ⌘Tab) leave NCM in front.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                guard let self, self.wantShown, !self.closing, self.window.styleMask.contains(.fullScreen),
-                      self.ncmWindowNumber() != nil else { return }
-                emit(["from": "host", "op": "fullscreen", "v": true])
-                NSApp.activate(ignoringOtherApps: true)
-            }
-            return
-        }
-        if isNcm, refocusAfterUnhide, wantShown, !closing {
-            refocusAfterUnhide = false
-            keepAboveNcm(true)
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        keepAboveNcm(isNcm || app == NSRunningApplication.current)
+        keepAboveNcm(app.bundleIdentifier == NCM_BUNDLE_ID || app == NSRunningApplication.current)
     }
 
     /// While NCM or this window is the active app, the lyric page floats one level up: NCM raises its
@@ -482,23 +529,19 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         window.orderFrontRegardless()
     }
 
-    /// NCM's frontmost on-screen player-sized window at the normal level (not its desktop lyric or mini bar).
+    /// NCM's frontmost on-screen window at the normal level.
     func ncmWindowNumber() -> Int? {
         guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: NCM_BUNDLE_ID).first?.processIdentifier,
               let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
         else { return nil }
-        let w = list.first {
-            let b = $0[kCGWindowBounds as String] as? [String: Any]
-            return ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int) == 0
-                && (b?["Width"] as? Double ?? 0) >= 400 && (b?["Height"] as? Double ?? 0) >= 300
-        }
+        let w = list.first { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
         return w?[kCGWindowNumber as String] as? Int
     }
 
     func sendWindowState() {
         let b = web.bounds.size
         toWeb(["t": "host.window", "w": b.width, "h": b.height, "visible": window.isVisible,
-               "fullscreen": window.styleMask.contains(.fullScreen)])
+               "fullscreen": ncmFS || window.styleMask.contains(.fullScreen)])
     }
 
     // MARK: NSWindowDelegate
@@ -523,18 +566,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     func windowDidExitFullScreen(_ n: Notification) {
         sendWindowState()
-        // NCM's window comes back where this one is now (hidden while in full screen)
-        let f = window.frame
-        emit(["from": "host", "op": "fullscreen", "v": false, "frame": topLeftFrame(),
-              "cocoa": ["x": f.minX, "y": f.minY, "w": f.width, "h": f.height]])
         if hiding { hiding = false; finishClose() } else if closing { closing = false; beginClose() }
-        else {
-            let f = NSWorkspace.shared.frontmostApplication
-            keepAboveNcm(f?.bundleIdentifier == NCM_BUNDLE_ID || f == NSRunningApplication.current)
-            // NCM's window is shown again with an activating call; keep the keyboard here
-            refocusAfterUnhide = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.refocusAfterUnhide = false }
-        }
+        else { let f = NSWorkspace.shared.frontmostApplication; keepAboveNcm(f?.bundleIdentifier == NCM_BUNDLE_ID || f == NSRunningApplication.current) }
     }
 
     func windowDidFailToExitFullScreen(_ window: NSWindow) {
@@ -546,14 +579,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func windowDidEnterFullScreen(_ n: Notification) {
         entering = false
         sendWindowState()
-        // a close or "hide" that came while entering: leave again, and never hide NCM for it
-        if hiding || closing { closing = true; window.toggleFullScreen(nil) }
-        else { emit(["from": "host", "op": "fullscreen", "v": true]) }
+        if hiding { closing = true; window.toggleFullScreen(nil) } // "hide" came while entering
     }
 
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
         entering = false
-        if hiding { hiding = false; finishClose() } else if closing { closing = false; beginClose() }
+        if hiding { hiding = false; finishClose() }
     }
 
     // MARK: WKNavigationDelegate

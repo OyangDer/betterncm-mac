@@ -25,6 +25,8 @@ const PROGRESS_MS = 250;
 const CHECK_DELAY_MS = 30;
 const STOCK_GRACE_MS = 1500; // a shift-click that opened nothing stops letting NCM's page through
 const OPEN_ANSWER_MS = 1500; // the injector answers an open at once; without an answer NCM's page opens
+const FS_SETTLE_MS = 150; // NCM's window stopped resizing
+const FS_WAIT_MS = 1500; // at most
 const FETCH_HOSTS = /^https:\/\/(music\.163\.com|interface\d*\.music\.163\.com)\//;
 const PROGRESS = 'audioplayer.onPlayProgress';
 const PLAY_STATE = 'audioplayer.onPlayState';
@@ -270,6 +272,26 @@ function installLyricsBridge() {
     sendIfChanged('roaming', [roaming, !!icon], icon ? { t: 'roaming', v: roaming, icon } : { t: 'roaming', v: roaming });
     // NCM renders its dislike button a moment after the mode changes
     if (roaming && !icon && iconTries++ < 5) setTimeout(queueCheck, 400);
+    const fs = !!s.app?.isFullScreen;
+    if (last.fullscreen !== JSON.stringify(fs)) { remember('fullscreen', fs); reportFullscreen(fs); }
+  }
+
+  // NCM's full screen, which the window follows (it lays itself over NCM's full-screen Space). The
+  // store changes before NCM's window has its new size, so the frame goes once the resizing settles.
+  let fsTimer = 0;
+  function reportFullscreen(v) {
+    clearTimeout(fsTimer);
+    let done = false;
+    const send = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('resize', onResize);
+      clearTimeout(fsTimer);
+      if (active) post({ t: 'fullscreen', v, frame: frame() });
+    };
+    const onResize = () => { clearTimeout(fsTimer); fsTimer = setTimeout(send, FS_SETTLE_MS); };
+    window.addEventListener('resize', onResize);
+    fsTimer = setTimeout(send, FS_WAIT_MS);
   }
   let checkQueued = false;
   function queueCheck() {
@@ -294,6 +316,7 @@ function installLyricsBridge() {
     remember('volume', s.volume);
     remember('playing', s.playing);
     remember('roaming', [s.roaming, !!(s.roaming && s.dislikeIcon)]);
+    remember('fullscreen', !!state().app?.isFullScreen);
     sendProgress(true);
   }
 
@@ -391,7 +414,6 @@ function installLyricsBridge() {
   function detach() {
     toStock();
     setActive(false);
-    unhideNcm(); // the injector is going away: NCM's window must not stay hidden
   }
 
   function clickEl(el) {
@@ -602,6 +624,7 @@ function installLyricsBridge() {
   // size to the size given (and may re-centre first), so it is made only when the frame differs,
   // and NCM's own minimum is put back after it. It does not raise NCM.
   function moveNcm(m) {
+    if (state().app?.isFullScreen) return; // NCM's full-screen window keeps its Space and frame
     const f = m.cocoa;
     const top = m.frame;
     const same = top && [top.x - window.screenX, top.y - window.screenY, top.w - window.outerWidth, top.h - window.outerHeight]
@@ -615,23 +638,7 @@ function installLyricsBridge() {
   // Hand the screen back to NCM: its window where the lyrics window was, raised.
   function showNcm(m) {
     moveNcm(m);
-    unhideNcm();
     winCall('winhelper.bringWindowToTop', []);
-    return true;
-  }
-  // While the lyrics window is in full screen (its own Space) NCM's window is hidden, as NCM's red
-  // button hides it, so the desktop does not keep a second player; it comes back when full screen ends.
-  let ncmHidden = false;
-  function hideNcm() {
-    ncmHidden = true;
-    winCall('winhelper.showWindow', ['hide']);
-    return true;
-  }
-  function unhideNcm(m) {
-    if (!ncmHidden) return false;
-    ncmHidden = false;
-    if (m) moveNcm(m);
-    winCall('winhelper.showWindow', ['show']);
     return true;
   }
 
@@ -724,8 +731,8 @@ function installLyricsBridge() {
     fallback: () => { toStock(); openStock(); return true; },
     // the injector is shutting down while NCM keeps running
     detach: () => { detach(); return true; },
-    hideNcm: () => hideNcm(),
-    unhideNcm: (m) => unhideNcm(m),
+    // the window's green button: NCM goes full screen (or back), and the window follows it
+    setFullscreen: (m) => { winCall('winhelper.setWindowFullScreen', [!!m.v]); return true; },
   };
 
   // Panel and menu actions handed to NCM: lyrics-actions-*.js preludes register them in

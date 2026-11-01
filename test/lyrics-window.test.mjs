@@ -143,8 +143,7 @@ test('a hello while the window is closed resets a bridge left active', async () 
   const { cdp, hosts, fromBridge } = setup();
   fromBridge({ t: 'hello' });
   await tick();
-  // and a stale full-screen hide of NCM's window (a no-op in a bridge that did not hide it)
-  assert.deepEqual(cdp.commands(), [{ c: 'active', v: false }, { c: 'unhideNcm' }]);
+  assert.deepEqual(cdp.commands(), [{ c: 'active', v: false }]);
   assert.equal(cdp.evals()[0].sid, 'S1');
   assert.equal(hosts.length, 0);
 });
@@ -332,49 +331,18 @@ test('minimizing moves NCM to the window\'s frame, minimizes it and makes the br
   assert.equal(relay.isOpen, false);
 });
 
-test('full screen hides NCM\'s window while open, and leaving it or the host exiting shows it again', async () => {
-  const { cdp, hosts, openWindow } = setup();
-  await openWindow();
-  const before = cdp.commands().length;
-  hosts[0].say({ from: 'host', op: 'fullscreen', v: true });
-  await tick();
-  const frame = { x: 5, y: 80, w: 1200, h: 800 };
-  const cocoa = { x: 5, y: 76, w: 1200, h: 800 };
-  hosts[0].say({ from: 'host', op: 'fullscreen', v: false, frame, cocoa });
-  await tick();
-  assert.deepEqual(cdp.commands().slice(before), [{ c: 'hideNcm' }, { c: 'unhideNcm', frame, cocoa }]);
-  // hidden again, then the host exits (crash) or the window is turned off: NCM comes back
-  hosts[0].say({ from: 'host', op: 'fullscreen', v: true });
-  await tick();
-  hosts[0].emit('exit', 1, null);
-  await tick();
-  assert.ok(cdp.commands().some((c, i) => i > before + 2 && c.c === 'unhideNcm'), 'unhidden on exit');
-});
-
-test('turning the window off in full screen shows NCM\'s window before the host ends', async () => {
-  const { cdp, hosts, relay, openWindow } = setup();
-  await openWindow();
-  hosts[0].say({ from: 'host', op: 'fullscreen', v: true });
-  await tick();
-  const n = cdp.commands().length;
-  relay.dispose();
-  await tick();
-  assert.deepEqual(cdp.commands()[n], { c: 'unhideNcm' });
-});
-
-test('a new bridge is told NCM\'s window is hidden; a hello while closed unhides a stale hide', async () => {
+test('full screen is NCM\'s: the green button asks the bridge, and NCM\'s change reaches the host while open', async () => {
   const { cdp, hosts, fromBridge, openWindow } = setup();
   await openWindow();
-  hosts[0].say({ from: 'host', op: 'fullscreen', v: true });
+  const before = cdp.commands().length;
+  hosts[0].say({ from: 'host', op: 'setFullscreen', v: true });
   await tick();
-  const n = cdp.commands().length;
-  fromBridge({ t: 'hello' }); // NCM's page reloaded under the full-screen window
+  assert.deepEqual(cdp.commands().slice(before), [{ c: 'setFullscreen', v: true }]);
+  const frame = { x: 0, y: 0, w: 1470, h: 956 };
+  fromBridge({ t: 'fullscreen', v: true, frame });
   await tick();
-  assert.deepEqual(cdp.commands().slice(n), [{ c: 'active', v: true }, { c: 'hideNcm' }]);
-  const fresh = setup();
-  fresh.fromBridge({ t: 'hello' });
-  await tick();
-  assert.deepEqual(fresh.cdp.commands().slice(-2), [{ c: 'active', v: false }, { c: 'unhideNcm' }]);
+  assert.deepEqual(hosts[0].lines.at(-1), { to: 'host', op: 'ncmFullscreen', v: true, frame });
+  assert.ok(!hosts[0].lines.some((l) => l.to === 'web' && l.msg?.t === 'fullscreen'), 'not for the page');
 });
 
 test('the host exiting makes the bridge inactive, and the next open starts a new host', async () => {
@@ -409,7 +377,7 @@ test('when the host cannot start, NCM opens its own page', async () => {
   relay2.onBindingCalled({ name: BINDING, payload: JSON.stringify({ t: 'hello' }) }, 'S1');
   relay2.onBindingCalled({ name: BINDING, payload: JSON.stringify({ t: 'open', frame: {} }) }, 'S1');
   await tick();
-  assert.deepEqual(cdp2.commands(), [{ c: 'active', v: false }, { c: 'unhideNcm' }, { c: 'fallback' }]);
+  assert.deepEqual(cdp2.commands(), [{ c: 'active', v: false }, { c: 'fallback' }]);
 
   // and once the window is turned off
   const s3 = setup();
