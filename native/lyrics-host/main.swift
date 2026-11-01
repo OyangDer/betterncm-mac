@@ -173,6 +173,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var window: LyricsWindow!
     var web: WKWebView!
     var strip: DragStrip!
+    var stripClear: CGFloat = 240 // right part of the top strip left to the page's tools (the page reports it)
     var pageReady = false
     var pendingToWeb: [[String: Any]] = []
     var lastBg: BgParams?
@@ -229,8 +230,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     func layoutStrip() {
         let b = window.contentView!.bounds
-        // left of the page's top-right tools (about 220 pt with the hidden ones shown)
-        strip.frame = NSRect(x: 0, y: b.height - 40, width: max(0, b.width - 240), height: 40)
+        // left of the page's top-right tools, which keep their clicks; the page reports how wide they get
+        strip.frame = NSRect(x: 0, y: b.height - 40, width: max(0, b.width - stripClear), height: 40)
         strip.autoresizingMask = [.width, .minYMargin]
     }
 
@@ -327,6 +328,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         case "copy":
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(m["text"] as? String ?? "", forType: .string)
+        case "dragClear":
+            if let r = m["right"] as? Double, r.isFinite, r >= 0 { stripClear = CGFloat(r); layoutStrip() }
         case "log": log("page: \(m["msg"] ?? "")")
         default: break
         }

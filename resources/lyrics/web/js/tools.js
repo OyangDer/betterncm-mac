@@ -1,5 +1,6 @@
 // The top-right tool row: the views switcher (歌词 / 百科 / 相似推荐 / 评论, from
 // compat-rnp-panels.js), settings, copy mode and the collapse chevron, in RNPN's row.
+import { host } from './bus.js';
 import { state, set, watch } from './state.js';
 
 const BTN = 28;
@@ -77,6 +78,9 @@ export function mountTools({ collapse }) {
   watch('view', (v) => { renderSwitcher(); lazy('./panels/index.js', 'showView', v); });
   watch('track', renderSwitcher);
   renderSwitcher();
+  // the row's left edge follows the window's width (RNPN's padding is in vw)
+  window.addEventListener('resize', reportDragClear);
+  watch('window', reportDragClear);
 }
 
 // The current view sits at the right end; the others line up to its left in a fixed order.
@@ -97,4 +101,19 @@ function renderSwitcher() {
   const n = shown.length;
   switcher.style.setProperty('--bncm-views-open-width', `${n * BTN + (n - 1) * GAP}px`);
   void RIM;
+  reportDragClear();
+}
+
+// The host lays a native drag strip over the window's top 40 px; the tool row must stay out of it,
+// including the switcher opened leftward (a real click there would move the window instead).
+let dragClear = -1;
+export function reportDragClear() {
+  const tools = document.querySelector('#rnp-view .rnp-window-tools');
+  if (!tools || !switcher) return;
+  const open = parseFloat(switcher.style.getPropertyValue('--bncm-views-open-width')) || BTN;
+  const left = tools.getBoundingClientRect().left - (open - BTN) - 12;
+  const right = Math.ceil(Math.max(0, innerWidth - left));
+  if (right === dragClear) return;
+  dragClear = right;
+  host('dragClear', { right });
 }
