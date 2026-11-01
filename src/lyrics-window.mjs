@@ -13,6 +13,13 @@ const HIDE_AFTER_NCM_MS = 120; // let NCM's window come up before ours goes, so 
 const PREWARM_MS = 4000;
 const NO_BRIDGE = 'no-bridge';
 const DETACH_MS = 300; // shutting down: how long the bridge gets to let go of NCM's page
+// A host that dies this soon after it started (without a word) or after an open did not get the
+// window up (Gatekeeper, a crash): NCM opens its own page. After QUICK_DEATHS of them in a row no
+// host is started again until the injector restarts.
+const QUICK_EXIT_MS = 5000;
+const QUICK_DEATHS = 3;
+// Commands only the injector sends (LYRICS-WINDOW.md); the window's page may not.
+const INJECTOR_ONLY = new Set(['detach', 'fallback', 'setFullscreen', 'showNcm', 'minimizeNcm', 'active']);
 // What the bridge posts; anything else (the host's own host.* messages above all) is not passed on.
 const BRIDGE_TYPES = new Set(['hello', 'open', 'snapshot', 'track', 'state', 'progress', 'liked', 'mode', 'volume', 'roaming', 'reply', 'fullscreen']);
 // Asks a page's bridge to say hello again: its first hello can come before the binding is there
@@ -53,12 +60,15 @@ export function isBridgeContext(s, contextId) {
  * paths: injectable for tests; defaults to hostPaths(root).
  */
 export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, root = PROJECT_ROOT, spawnHost = null, paths = null,
-  prewarmMs = PREWARM_MS } = {}) {
+  prewarmMs = PREWARM_MS, quickExitMs = QUICK_EXIT_MS } = {}) {
   let bridgeSid = null; // the session whose page runs the bridge (NCM's main window)
   let host = null;
   let prewarm = null;
   let disposed = false;
   let open = false;
+  let openedAt = -Infinity; // the last open, for telling a host that died of it
+  let openSeq = 0;
+  let quickDeaths = 0;
   const bound = new Set(); // sessions given the binding
   const evals = new Map();
   let evalSeq = 0;
@@ -99,6 +109,7 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
   function startHost() {
     if (host) return host;
     if (disposed) return null;
+    if (quickDeaths >= QUICK_DEATHS) return null; // it keeps dying: NCM's own page from now on
     const p = paths || hostPaths(root);
     if (!spawnHost && !fs.existsSync(p.bin)) {
       log('lyrics: host binary missing at', p.bin);
@@ -118,9 +129,14 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
     }
     host = child;
     log(`lyrics: host started (pid ${child.pid ?? '?'})`);
+    const startedAt = Date.now();
+    let spoke = false;
     let buf = '';
     child.stdout?.setEncoding?.('utf8');
     child.stdout?.on('data', (chunk) => {
+      spoke = true;
+      // up and talking well after its start and the last open: the deaths are no longer in a row
+      if (quickDeaths && Date.now() - Math.max(startedAt, openedAt) >= quickExitMs) quickDeaths = 0;
       buf += chunk;
       let i;
       while ((i = buf.indexOf('\n')) >= 0) {
@@ -148,7 +164,15 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
       if (host !== child) return;
       host = null;
       rejectPending('the lyrics window exited');
-      if (open) { open = false; evalInBridge({ c: 'active', v: false }); }
+      const now = Date.now();
+      const quick = (!spoke && now - startedAt < quickExitMs) || now - openedAt < quickExitMs;
+      quickDeaths = quick ? quickDeaths + 1 : 0;
+      if (quickDeaths >= QUICK_DEATHS) log(`lyrics: the host died ${quickDeaths} times in a row; NCM's own page until the injector restarts`);
+      if (open) {
+        open = false;
+        // the click got no window: NCM's own page instead of nothing
+        evalInBridge(quick ? { c: 'fallback' } : { c: 'active', v: false });
+      }
     };
     child.on('error', (e) => { log('lyrics: host error:', e.message); if (child.pid == null) onGone(e.message); });
     child.on('exit', (code, sig) => onGone(sig ?? code));
@@ -168,6 +192,7 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
     if (msg.from === 'web') {
       const m = msg.msg;
       if (m && typeof m.c === 'string') {
+        if (INJECTOR_ONLY.has(m.c)) { log('lyrics: refused a command from the page:', m.c); return; }
         const r = await evalInBridge(m);
         if (r === NO_BRIDGE && m.rid) toHost({ to: 'web', msg: { t: 'reply', rid: m.rid, ok: false, error: 'NCM page not ready' } });
       }
@@ -230,9 +255,15 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
         return;
       }
       open = true;
+      openedAt = Date.now();
+      const seq = ++openSeq;
       toHost({ to: 'web', msg: { ...msg, version: MAC_VERSION } });
       toHost({ to: 'host', op: 'show', frame: msg.frame, fullscreen: !!msg.fullscreen });
-      evalInBridge({ c: 'active', v: true });
+      if (await evalInBridge({ c: 'active', v: true }) === NO_BRIDGE && open && seq === openSeq) {
+        // NCM's page could not be told: a window it does not drive would only stand in the way
+        open = false;
+        toHost({ to: 'host', op: 'hide' });
+      }
       return;
     }
     toHost({ to: 'web', msg });

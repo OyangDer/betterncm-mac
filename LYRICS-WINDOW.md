@@ -52,22 +52,29 @@ Every message is one JSON object.
 
 ### Page → bridge (`c`)
 
-`hello`, `snapshot`, `active{v}` (the window is showing, so send progress), `drawn{v}` (sent on
+`hello`, `snapshot`, `drawn{v}` (sent on
 `visibilitychange` while the window is shown: with `v` false the window is covered or the screen is
 locked, so progress waits; back to true, a forced progress catches the page up; `active` resets it
 to true), `toggle`, `prev`, `next`, `seek{sec}`, `volume{v}`, `like`, `mode`, `playlist`, `dislike`,
-`nav{hash}` (navigate NCM, used with `close`), `setFullscreen{v}` (from the injector: NCM's
-`winhelper.setWindowFullScreen`), `fetch{rid,url}` (GET from NCM's page with its
+`nav{hash}` (navigate NCM, used with `close`), `fetch{rid,url}` (GET from NCM's page with its
 cookies; music.163.com and interface*.music.163.com only), `rnpSettings{rid}` (RNPN's localStorage,
 for a one-time migration), `ncmAction{rid,action,...}` (panel and menu actions handed to NCM),
-`showNcm{frame,cocoa}` (move NCM's window to the frame and bring it to the front),
-`minimizeNcm{frame,cocoa}` (move NCM's window to the frame without raising it, then minimize it),
 `accentPixels{rid,url}` (the cover scaled to 32×32 by NCM's Chromium, for the accent colour).
 
-From the injector only: `fallback` (the window cannot open: let NCM open its own page) and `detach`
-(the injector is shutting down: inactive, and NCM's own page opens again from then on, nothing is
-opened now). An `open` that gets neither `active{v:true}` nor `fallback` within 1.5 s means the
-injector is gone: the bridge detaches and NCM's own page opens for that click.
+From the injector only (the injector refuses them from the page): `active{v}` (the window is
+showing, so send progress), `setFullscreen{v}` (NCM's `winhelper.setWindowFullScreen`),
+`showNcm{frame,cocoa}` (move NCM's window to the frame and bring it to the front),
+`minimizeNcm{frame,cocoa}` (move NCM's window to the frame without raising it, then minimize it),
+`fallback` (the window cannot open: let NCM open its own page) and `detach` (the injector is
+shutting down: inactive, and NCM's own page opens again from then on, nothing is opened now). An
+`open` that gets neither `active{v:true}` nor `fallback` within 1.5 s means the injector is gone:
+the bridge detaches and NCM's own page opens for that click; a later `active{v:true}` or the
+injector's `hello` makes opens the window's again.
+
+The injector answers an `open` with `fallback` when the host cannot start, or exits before its first
+line within 5 s of starting or within 5 s of the open (Gatekeeper, a crash); after three such exits
+in a row it starts no host until it restarts itself. When `active{v:true}` cannot reach NCM's page
+the injector hides the window again.
 
 `nav` takes only RNPN's old NCM 2 hashes (`#/m/artist/?id=1`; `album`, `playlist`,
 `personal/?uid=`, `song`), which go through NCM's own link action (`song` opens its comments).
@@ -140,8 +147,13 @@ it); the next `hello` pre-warms a new one. When the injector shuts down it first
   store. Shift-click opens NCM's own page.
 - **Starting.** The injector starts the host, hidden, a few seconds after NCM's page is ready, so the
   first open does not wait for WebKit.
+- **First click.** The web view and the drag strip take the first click while another app is
+  active, so it reaches the page instead of only activating the window.
 - **Collapsing.** The chevron, Esc, ⌘W and the red button all collapse. NCM's window is moved to the
-  lyric window's frame and brought to the front, then the lyric window hides.
+  lyric window's frame and brought to the front, then the lyric window hides and the host activates
+  NCM (otherwise this accessory app would stay active with no window). A `hide` that arrives after the
+  window was opened again before that collapse finished (a late answer to its `closing`) is ignored,
+  once and only within 6 s; any other `hide` still closes it.
 - **The yellow button** (and a double-click on the top strip when the system's title-bar double-click
   is set to Minimize) collapses and minimizes NCM: NCM is moved to the lyric window's frame, without
   being raised, and minimized. Full screen disables it.
@@ -151,6 +163,14 @@ it); the next `hello` pre-warms a new one. When the injector shuts down it first
   the active Space (NCM's full-screen one) as a full-screen auxiliary window and pinned there. So a
   Dock click on NCM lands on the lyrics, the desktop does not get them, and a collapse shows NCM's
   full-screen window. Over a full screen the traffic lights and the drag strip are hidden; ⌃⌘F leaves.
+  Two toggles before NCM answers ask for there and back. If NCM does not answer within 4 s, the window
+  goes back to the frame it had before covering the screen. Leaving full screen, the frame NCM's page
+  reports is stale (covered, its Chromium keeps the full-screen `screenX`/`outerWidth`), so the window
+  starts from its frame before full screen and then takes NCM's main window bounds from the window
+  server, polled every 0.15 s for up to 2.5 s until they are no longer screen-sized and stable. The
+  yellow button does nothing while NCM is on its way in or out. AppKit's own full screen (still
+  reachable from the green button's hover menu; tiling is disallowed) is left by ⌃⌘F, a collapse or
+  `hide`.
 - **NCM activated from the Dock or ⌘Tab while the lyric window is open.** The lyric window is
   ordered back above NCM.
 - **Background.** The blurred background is rendered by the host once per cover, size and scheme,
@@ -158,7 +178,9 @@ it); the next `hello` pre-warms a new one. When the injector shuts down it first
 - **Only its own page.** The web view navigates only to `bncm://app/` (main frame and frames); a
   dropped link or file is refused, and a clicked web link opens in the default browser. The host
   takes script messages only from the main frame with origin `bncm://app`. If the page is ever lost
-  (its process dies, or something else got committed) the host loads `bncm://app/index.html` again.
+  (its process dies, or something else got committed) the host loads `bncm://app/index.html` again;
+  a failed load is retried after 1 s, backing off to 30 s. Messages for the page queue while it is
+  not ready, 500 at most.
 - **Power.** The page animates only `transform` and `opacity`, and JS runs once per lyric line, not
   per frame. A hidden window draws nothing.
 
@@ -169,8 +191,11 @@ it); the next `hello` pre-warms a new one. When the injector shuts down it first
   never compile it.
 - **Run JS in the window's page**: `POST /api/internal/lyrics_eval` with the JS as the body. The value of the
   expression comes back; a promise is awaited.
-- **Take a PNG of the page**: `POST /api/internal/lyrics_snapshot?path=/abs/file.png`.
-  - Both routes need the API key; the port and key are in `run/state.json`.
+- **Take a PNG of the page**: `POST /api/internal/lyrics_snapshot?path=/abs/file.png`. The file must be a `.png`
+  in an existing directory under the temp directory (`os.tmpdir()` or `/tmp`, by real path; a symlink there that
+  leads out is refused, as is one at the file itself).
+  - Both routes need the API key (the port and key are in `run/state.json`) and `mac.lyricsTest: "true"`, read per
+    request; without it they answer 404, since any plugin has the key.
 - **`mac.lyricsTest: "true"`**: the window draws and animates even while it cannot be seen, for example with the
   screen locked, so snapshots still work. Leave it off otherwise: a covered or hidden window must stop drawing.
 - **The page has no build step.** Edit the files under `resources/lyrics/web/` and open the window again; the host

@@ -1,6 +1,7 @@
 // Local API server: v2's App.cpp routes, the sync native bridge, SSE callbacks and static mounts.
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
@@ -28,6 +29,21 @@ const QUEUE_TTL_MS = 10000;
 const SAFE_MODE_KEY = 'cc.microblock.betterncm.cpp_side_inject_feature_disabled';
 
 // ---------- small helpers ----------
+
+// The lyrics window's development routes run JS in its page and write files: only with
+// mac.lyricsTest on (read per request), and snapshots only into the temp directories.
+const lyricsDevOn = () => readConfigKey('mac.lyricsTest') === 'true';
+function snapshotPath(p) {
+  if (!path.isAbsolute(p) || !p.endsWith('.png')) return null;
+  let dir;
+  try { dir = fs.realpathSync(path.dirname(p)); } catch { return null; }
+  const roots = new Set();
+  for (const r of [os.tmpdir(), '/tmp']) { try { roots.add(fs.realpathSync(r)); } catch { /* none */ } }
+  if (![...roots].some((r) => dir === r || dir.startsWith(r + '/'))) return null;
+  const file = path.join(dir, path.basename(p));
+  try { if (fs.lstatSync(file).isSymbolicLink()) return null; } catch { /* a new file */ }
+  return file;
+}
 
 function randomString(n) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -511,8 +527,8 @@ export async function startServer({ apiKey, hooks = {} }) {
     },
     // Development: run JS in the lyrics window's page and return its value (LYRICS-WINDOW.md).
     '/internal/lyrics_eval': async (_q, req, res) => {
+      if (!hooks.onLyricsEval || !lyricsDevOn()) { send(res, 404); return; }
       const js = (await readBody(req, 1024 * 1024)).toString('utf8');
-      if (!hooks.onLyricsEval) { send(res, 404); return; }
       try {
         sendJson(res, { value: await hooks.onLyricsEval(js) });
       } catch (e) {
@@ -520,9 +536,11 @@ export async function startServer({ apiKey, hooks = {} }) {
       }
     },
     '/internal/lyrics_snapshot': async (q, _req, res) => {
-      if (!hooks.onLyricsSnapshot) { send(res, 404); return; }
+      if (!hooks.onLyricsSnapshot || !lyricsDevOn()) { send(res, 404); return; }
+      const file = snapshotPath(q.get('path') ?? '');
+      if (!file) { send(res, 403, 'snapshots go to a .png under the temp directory'); return; }
       try {
-        sendJson(res, { value: await hooks.onLyricsSnapshot(q.get('path') ?? '') });
+        sendJson(res, { value: await hooks.onLyricsSnapshot(file) });
       } catch (e) {
         send(res, 500, String(e?.message ?? e));
       }

@@ -149,6 +149,7 @@ function load({ webpack = true, tap = true, state: initial = {}, cfg = 'true', h
   };
   const taps = [];
   const registered = [];
+  const winListeners = {};
   const ctx = {
     __BNCM_CFG__: { 'mac.lyricsWindow': cfg },
     location: { href },
@@ -170,8 +171,9 @@ function load({ webpack = true, tap = true, state: initial = {}, cfg = 'true', h
     fetch: async (url, opt) => { fetches.push([url, opt]); return { text: async () => '{"code":200}' }; },
     __bncmLyricsPost: (s) => posts.push(JSON.parse(s)),
     btoa: (s) => Buffer.from(s, 'binary').toString('base64'),
-    addEventListener: () => {}, // window's (resize)
-    removeEventListener: () => {},
+    // window's (resize)
+    addEventListener: (t, fn) => (winListeners[t] ||= []).push(fn),
+    removeEventListener: (t, fn) => { winListeners[t] = (winListeners[t] || []).filter((f) => f !== fn); },
   };
   if (tap) ctx.__bncmChannelTap = (fn) => taps.push(fn);
   ctx.window = ctx;
@@ -191,9 +193,11 @@ function load({ webpack = true, tap = true, state: initial = {}, cfg = 'true', h
     return e;
   };
   const boot = () => advance(300 * 21);
+  const resize = () => (winListeners.resize || []).slice().forEach((f) => f());
   const ofType = (t) => posts.filter((p) => p.t === t);
   return { ctx, posts, ofType, actions, nativeCalls, fetches, consoleOut, advance, boot, setState, setPlaying, store, vinyl, history,
     playlistModule, registered, cover, dom, dislikeBtn, playlistBtn, collapseBtn, bodyClasses, head, domReady, emit, progress, cmd, click, taps,
+    winListeners, resize,
     get state() { return state; }, get now() { return now; } };
 }
 
@@ -595,6 +599,36 @@ test('the window follows NCM\'s full screen: setFullscreen asks NCM, and a chang
   assert.deepEqual(p.nativeCalls, [['winhelper.bringWindowToTop', []]]);
 });
 
+test('a full-screen flip that comes back before it settled reports only the last state, with one resize listener', () => {
+  const p = load();
+  p.boot();
+  p.cmd({ c: 'active', v: true });
+  p.setState({ app: { ...p.state.app, isFullScreen: 1 } });
+  p.advance(100);
+  p.setState({ app: { ...p.state.app, isFullScreen: 0 } });
+  p.advance(100);
+  assert.equal(p.winListeners.resize.length, 1, 'the first report\'s listener is gone');
+  p.resize();
+  p.advance(200);
+  assert.deepEqual(p.ofType('fullscreen').map((m) => m.v), [false]);
+  assert.equal(p.winListeners.resize.length, 0);
+  p.advance(5000);
+  assert.deepEqual(p.ofType('fullscreen').map((m) => m.v), [false]);
+});
+
+test('a full-screen report waits FS_WAIT_MS at most, resizing or not', () => {
+  const p = load();
+  p.boot();
+  p.cmd({ c: 'active', v: true });
+  p.setState({ app: { ...p.state.app, isFullScreen: 1 } });
+  // NCM's hidden page keeps resizing in steps: the report still goes by the deadline
+  for (let i = 0; i < 14; i++) { p.advance(100); p.resize(); }
+  assert.equal(p.ofType('fullscreen').length, 0);
+  p.advance(200); // the store check runs CHECK_DELAY_MS after the change
+  assert.deepEqual(p.ofType('fullscreen').map((m) => m.v), [true]);
+  assert.equal(p.winListeners.resize.length, 0);
+});
+
 test('fetch goes to NCM\'s API hosts only', async () => {
   const p = load();
   p.boot();
@@ -724,6 +758,31 @@ test('an answer that comes after the watchdog gave up makes later opens the wind
   p.cmd({ c: 'detach' });
   p.cmd({ c: 'active', v: true });
   p.cmd({ c: 'active', v: false });
+  p.posts.length = 0;
+  p.advance(1000);
+  p.vinyl.next('opening');
+  assert.equal(p.ofType('open').length, 0);
+});
+
+test('the injector\'s hello after an unanswered open makes later opens the window\'s again', () => {
+  const p = load();
+  p.boot();
+  p.vinyl.next('opening');
+  p.advance(1600); // the injector was reconnecting: the watchdog opened NCM's page
+  assert.deepEqual(p.actions, [{ type: 'playing/openVinylPage' }]);
+  p.cmd({ c: 'hello' }); // it is back
+  p.cmd({ c: 'active', v: false }); // the relay's reset on hello
+  p.vinyl.next('opening'); // NCM's page, opened by the watchdog, is still let through
+  p.vinyl.next('closed');
+  assert.ok(!p.bodyClasses.has('bncm-stock-vinyl'), 'NCM\'s page closed: hidden again');
+  p.posts.length = 0;
+  p.advance(1000);
+  p.vinyl.next('opening');
+  assert.equal(p.ofType('open').length, 1);
+  // after a detach a hello does not bring the window back
+  p.cmd({ c: 'active', v: true });
+  p.cmd({ c: 'detach' });
+  p.cmd({ c: 'hello' });
   p.posts.length = 0;
   p.advance(1000);
   p.vinyl.next('opening');

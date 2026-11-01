@@ -400,6 +400,8 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
       const r = await restartNcm(cdpPort);
       ncmPid = r.pid;
       cdpPort = r.port;
+      // the old NCM is gone (onBrowserClose skips that while restarting): so is the lyrics window
+      lyrics.ncmGone();
       if (cdp && !cdp.closed) cdp.close();
       sessions.clear();
       await attachBrowser();

@@ -62,7 +62,7 @@ function fakeHost() {
 }
 
 /** fromBridgeContext: the injector's check of the calling context; every call passes by default. */
-function setup({ evalValue, spawnFails = false, prewarmMs = null, fromBridgeContext = () => true } = {}) {
+function setup({ evalValue, spawnFails = false, prewarmMs = null, fromBridgeContext = () => true, quickExitMs } = {}) {
   const cdp = fakeCdp({ evalValue });
   const hosts = [];
   const spawnHost = (bin, args) => {
@@ -73,7 +73,7 @@ function setup({ evalValue, spawnFails = false, prewarmMs = null, fromBridgeCont
     hosts.push(h);
     return h;
   };
-  const relay = createLyricsRelay({ getCdp: () => cdp, fromBridgeContext, spawnHost, paths: PATHS, prewarmMs });
+  const relay = createLyricsRelay({ getCdp: () => cdp, fromBridgeContext, spawnHost, paths: PATHS, prewarmMs, quickExitMs });
   const fromBridge = (msg, sid = 'S1', executionContextId = 1) =>
     relay.onBindingCalled({ name: BINDING, payload: JSON.stringify(msg), executionContextId }, sid);
   /** The bridge says hello and asks for the window; the calls so far are forgotten. */
@@ -346,7 +346,7 @@ test('full screen is NCM\'s: the green button asks the bridge, and NCM\'s change
 });
 
 test('the host exiting makes the bridge inactive, and the next open starts a new host', async () => {
-  const { cdp, hosts, relay, fromBridge, openWindow } = setup();
+  const { cdp, hosts, relay, fromBridge, openWindow } = setup({ quickExitMs: 0 }); // not a quick death
   await openWindow();
   const pending = assert.rejects(relay.evalInWindow('1 + 1'), /exited/);
   hosts[0].emit('exit', 1, null);
@@ -387,6 +387,77 @@ test('when the host cannot start, NCM opens its own page', async () => {
   await tick();
   assert.equal(s3.hosts.length, 0);
   assert.deepEqual(s3.cdp.commands().at(-1), { c: 'fallback' });
+});
+
+test('a host that dies soon after an open lets NCM open its own page; three in a row and none starts again', async () => {
+  const { cdp, hosts, relay, fromBridge, openWindow } = setup({ prewarmMs: 5 });
+  await openWindow();
+  hosts[0].emit('exit', null, 'SIGKILL'); // Gatekeeper
+  await tick();
+  assert.deepEqual(cdp.commands().at(-1), { c: 'fallback' });
+  assert.equal(relay.isOpen, false);
+  // a pre-warmed host that dies before saying anything counts too
+  fromBridge({ t: 'hello' });
+  await wait(30);
+  assert.equal(hosts.length, 2);
+  hosts[1].emit('exit', 1, null);
+  fromBridge({ t: 'open', frame: { x: 0, y: 0, w: 1, h: 1 } });
+  await tick();
+  assert.equal(hosts.length, 3);
+  hosts[2].emit('exit', 1, null);
+  await tick();
+  // given up: the next open is NCM's at once, and no pre-warm starts one
+  cdp.calls.length = 0;
+  fromBridge({ t: 'hello' });
+  await wait(30);
+  fromBridge({ t: 'open', frame: { x: 0, y: 0, w: 1, h: 1 } });
+  await tick();
+  assert.equal(hosts.length, 3);
+  assert.deepEqual(cdp.commands().at(-1), { c: 'fallback' });
+  relay.dispose();
+});
+
+test('a host that lived and talked resets the count of quick deaths', async () => {
+  const { cdp, hosts, fromBridge, openWindow } = setup({ quickExitMs: 20 });
+  await openWindow();
+  hosts[0].emit('exit', 1, null);
+  fromBridge({ t: 'open', frame: { x: 0, y: 0, w: 1, h: 1 } });
+  await tick();
+  hosts[1].emit('exit', 1, null);
+  fromBridge({ t: 'open', frame: { x: 0, y: 0, w: 1, h: 1 } });
+  await tick();
+  await wait(40);
+  hosts[2].say({ from: 'host', op: 'log', msg: 'fine' });
+  hosts[2].emit('exit', 1, null);
+  await tick();
+  assert.deepEqual(cdp.commands().at(-1), { c: 'active', v: false }, 'not quick: no fallback');
+  fromBridge({ t: 'open', frame: { x: 0, y: 0, w: 1, h: 1 } });
+  await tick();
+  assert.equal(hosts.length, 4, 'still started');
+});
+
+test('an open NCM\'s page cannot be told about hides the window again', async () => {
+  const { hosts, relay, fromBridge } = setup({ evalValue: (expr) => (/"c":"active","v":true/.test(expr) ? 'no-bridge' : true) });
+  fromBridge({ t: 'hello' });
+  fromBridge({ t: 'open', frame: { x: 0, y: 0, w: 1, h: 1 } });
+  await tick();
+  await tick();
+  assert.deepEqual(hosts[0].lines.at(-1), { to: 'host', op: 'hide' });
+  assert.equal(relay.isOpen, false);
+});
+
+test('commands only the injector sends are refused from the page; the page\'s own pass', async () => {
+  const { cdp, hosts, openWindow } = setup();
+  await openWindow();
+  for (const c of ['detach', 'fallback', 'setFullscreen', 'showNcm', 'minimizeNcm', 'active']) hosts[0].say({ from: 'web', msg: { c, v: true } });
+  await tick();
+  assert.deepEqual(cdp.commands(), []);
+  // every command resources/lyrics/web/js sends (send() and request())
+  const page = ['hello', 'snapshot', 'drawn', 'toggle', 'prev', 'next', 'seek', 'volume', 'like', 'mode', 'playlist', 'dislike',
+    'nav', 'fetch', 'rnpSettings', 'ncmAction', 'accentPixels'];
+  for (const c of page) hosts[0].say({ from: 'web', msg: { c } });
+  await tick();
+  assert.deepEqual(cdp.commands().map((m) => m.c), page);
 });
 
 test('a spawn that fails asynchronously counts as an exit', async () => {

@@ -280,16 +280,24 @@ function installLyricsBridge() {
   }
 
   // NCM's full screen, which the window follows (it lays itself over NCM's full-screen Space). The
-  // store changes before NCM's window has its new size, so the frame goes once the resizing settles.
+  // store changes before NCM's window has its new size, so the frame goes once the resizing settles,
+  // or after FS_WAIT_MS at most: NCM's page is hidden behind the lyrics window, so a resize may never
+  // come and frame() may be stale (the host reads NCM's real bounds itself on leaving full screen).
   let fsTimer = 0;
+  let fsDeadline = 0;
+  let fsResize = null; // the pending report's listener: a second flip replaces it
   function reportFullscreen(v) {
     clearTimeout(fsTimer);
+    clearTimeout(fsDeadline);
+    if (fsResize) window.removeEventListener('resize', fsResize);
     let done = false;
     const send = () => {
       if (done) return;
       done = true;
       window.removeEventListener('resize', onResize);
+      if (fsResize === onResize) fsResize = null;
       clearTimeout(fsTimer);
+      clearTimeout(fsDeadline);
       if (!active) return;
       const f = frame();
       post({ t: 'fullscreen', v, frame: f });
@@ -300,8 +308,9 @@ function installLyricsBridge() {
       }, FS_SETTLE_AGAIN_MS);
     };
     const onResize = () => { clearTimeout(fsTimer); fsTimer = setTimeout(send, FS_SETTLE_MS); };
+    fsResize = onResize;
     window.addEventListener('resize', onResize);
-    fsTimer = setTimeout(send, FS_WAIT_MS);
+    fsDeadline = setTimeout(send, FS_WAIT_MS);
   }
   let checkQueued = false;
   function queueCheck() {
@@ -661,7 +670,9 @@ function installLyricsBridge() {
   const reply = (m, ok, v) => post(ok ? { t: 'reply', rid: m.rid, ok: true, data: v } : { t: 'reply', rid: m.rid, ok: false, error: String(v?.message || v) });
 
   const commands = {
-    hello: () => { hello(); return true; },
+    // the injector says hello when it (re)attaches: it is back, so an open the watchdog gave up on
+    // no longer leaves NCM's own page in charge
+    hello: () => { revive(); hello(); return true; },
     snapshot: () => { post(snapshot()); return true; },
     active: (m) => { if (m.v) { answered(); revive(); } setActive(m.v); return true; },
     drawn: (m) => {
