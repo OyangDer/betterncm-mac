@@ -2,11 +2,42 @@
   "name": "betterncm-mac",
   "version": "0.1.0",
   "description": "BetterNCM II for NetEase Cloud Music on macOS, injected over the Chrome DevTools Protocol without modifying the app",
-  "private": true,
+  "keywords": [
+    "betterncm",
+    "netease-cloud-music",
+    "macos",
+    "refinednowplaying"
+  ],
+  "homepage": "https://github.com/OyangDer/betterncm-mac#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OyangDer/betterncm-mac.git"
+  },
+  "bugs": {
+    "url": "https://github.com/OyangDer/betterncm-mac/issues"
+  },
+  "os": [
+    "darwin"
+  ],
   "type": "module",
   "bin": {
     "bncm-mac": "bin/bncm-mac.mjs"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "dist/",
+    "resources/",
+    "vendor/",
+    "app-wrapper/",
+    "scripts/build-app.mjs",
+    "install.sh",
+    "framework/",
+    "!framework/node_modules/",
+    "patches/",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=22"
   },

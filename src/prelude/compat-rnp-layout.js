@@ -38,6 +38,18 @@ const CSS = `
 #rnp-view .g-single-track .g-singlec-ct .n-single .rnp-v3-side { transform: translateY(${BLOCK_SHIFT_VH}vh); }
 /* + 60px: .rnp-lyrics's own horizontal padding */
 #rnp-view .rnp-lyrics { max-width: calc(${LYRIC_COLUMN_VW}vw + 60px); }
+/* The title clips its overflow (for its marquee) at a 1.08 line height, cutting off descenders
+   such as g; room below the text, taken back by the margin so nothing moves. */
+#rnp-view .n-single .mn .title .name { padding-bottom: 0.18em; margin-bottom: -0.18em; }
+/* Translations (and romaji) under the original line: RNPN draws translations at the original's
+   size, which CJK text makes look heavier than the line it translates, the more so the larger the
+   lyrics. 0.62em + 6px shrinks it more as the lyrics grow, as Apple Music sets translations
+   smaller: ~0.9x at 20px, ~0.8x at 30px, ~0.75x at 50px. A smaller size picked in RNPN's
+   settings (--lyric-translation-size-em) still wins. */
+#rnp-view .rnp-lyrics-line > div.rnp-lyrics-line-translated {
+  font-size: min(var(--lyric-translation-size-em, 1em), calc(0.62em + 6px));
+  margin-top: 0.12em;
+}
 ${MN} { position: relative; }
 ${VOL} {
   position: absolute;
@@ -45,7 +57,7 @@ ${VOL} {
   right: var(--bncm-vol-right, ${SIZE + GAP}px);
   width: ${SIZE}px !important; /* RNPN sizes the volume row with a more specific rule */
   height: ${SIZE}px;
-  border-radius: 10px;
+  border-radius: ${SIZE / 2}px; /* a circle, and a capsule when open, like the other controls */
   overflow: hidden;
   background: transparent;
   color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.72);
@@ -54,6 +66,7 @@ ${VOL} {
 /* Plain icons like the rest of the page; a tint only under the pointer. */
 #rnp-view .rnp-info-more-button {
   background: transparent !important;
+  border-radius: 50% !important;
   transition: background-color 0.2s ease;
 }
 #rnp-view .rnp-info-more-button:hover { background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.1) !important; }

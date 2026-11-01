@@ -49,7 +49,7 @@ ${TOOLS} {
 ${TOOLS} .rnp-window-tool {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 50%; /* round, like every icon button on the page */
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;

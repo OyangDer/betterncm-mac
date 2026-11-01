@@ -7,8 +7,8 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
-  NCM_APP, BNCM_VERSION, MAC_VERSION, PROJECT_ROOT, TESTED_NCM_LABEL, getDataPath, ensureDataDirs, getNcmVersion,
-  getNcmBuild, getMacConfig, isSafeMode, ncmSupport,
+  NCM_APP, BNCM_VERSION, MAC_VERSION, PROJECT_ROOT, STANDALONE_APP, TESTED_NCM_LABEL, getDataPath, ensureDataDirs,
+  getNcmVersion, getNcmBuild, getMacConfig, isSafeMode, ncmSupport,
 } from '../src/config.mjs';
 import { log, setQuiet } from '../src/log.mjs';
 import { alertDialogDetached } from '../src/dialog.mjs';
@@ -30,15 +30,19 @@ Usage: bncm-mac <command> [options]
   attach [--port N]              attach to an NCM that already has a debug port; never launches or quits it
   doctor                         print versions, ports, targets, data dir and plugin decisions
   reload                         re-extract plugins in the running injector and reload the pages
+  stop                           stop the injector; NCM keeps running (open BetterNCM.app to resume)
   install-app [--dest DIR] [--dock]
-                                 write BetterNCM.app (default ~/Applications); --dock also pins it
+                                 (source checkout) write BetterNCM.app (default ~/Applications);
+                                 --dock also pins it
+  setup-app [--no-dock]          (self-contained app) copy NCM's icon into it and pin it to the
+                                 Dock; the app does this itself the first time it is opened
   uninstall-app [--dest DIR]     remove BetterNCM.app (and its Dock icon)
   uninstall [--purge] [--dest DIR]
                                  stop the injector and remove BetterNCM.app; --purge also deletes
                                  the data dir (plugins, settings, logs)
 
 Data dir: ${getDataPath()} (override with BETTERNCM_PROFILE)
-
+${STANDALONE_APP ? `Commands run as: '${STANDALONE_APP}/Contents/MacOS/BetterNCM' <command>\n` : ''}
 Security: while NCM runs with --remote-debugging-port, any local process can control it over
 CDP on 127.0.0.1, including the logged-in account and cookies.`;
 
@@ -160,7 +164,7 @@ async function cmdDoctor() {
   const check = (level, what) => checks.push(`${level.padEnd(4)} ${what}`);
 
   out('betterncm-mac', `${MAC_VERSION} (reports BetterNCM ${BNCM_VERSION}), node ${process.version}`);
-  out('project', PROJECT_ROOT);
+  out('project', STANDALONE_APP ? `${STANDALONE_APP} (self-contained)` : PROJECT_ROOT);
   if (nodeTooOld()) check('FAIL', `node ${process.version} is too old; install Node.js ${MIN_NODE} or later`);
   else check('OK', `node ${process.version}`);
 
@@ -177,8 +181,14 @@ async function cmdDoctor() {
   }
 
   const wrapper = appPath({});
-  const targets = fs.existsSync(wrapper) && bundleIdOf(wrapper) === WRAPPER_ID ? wrapperTargets(wrapper) : null;
-  if (!targets) {
+  const ours = fs.existsSync(wrapper) && bundleIdOf(wrapper) === WRAPPER_ID;
+  const selfContained = ours && fs.existsSync(path.join(wrapper, 'Contents/Resources/app/bin/bncm-mac.mjs'));
+  const targets = ours && !selfContained ? wrapperTargets(wrapper) : null;
+  if (STANDALONE_APP) {
+    check('OK', `${STANDALONE_APP} (self-contained, node ${process.version})`);
+  } else if (selfContained) {
+    check('WARN', `${wrapper} is the self-contained app; it runs its own copy, not this checkout (run install-app here to switch)`);
+  } else if (!targets) {
     check('WARN', `${wrapper} not installed (run install-app)`);
   } else if (!targets.cli) {
     check('WARN', `${wrapper} was made by an older install-app (run install-app again)`);
@@ -264,7 +274,36 @@ function shellQuote(s) {
 }
 
 function appPath(values) {
+  if (!values.dest && STANDALONE_APP) return STANDALONE_APP;
   return path.join(values.dest ? path.resolve(values.dest) : path.join(os.homedir(), 'Applications'), 'BetterNCM.app');
+}
+
+// Where the self-contained app was last set up (setup-app); see there.
+function appPathMarker() {
+  return path.join(getDataPath(), 'app-path');
+}
+
+// Borrow NCM's icon (read only) so the Dock entry is recognisable.
+function copyNcmIcon(contents) {
+  try {
+    const iconName = execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', path.join(NCM_APP, 'Contents/Info.plist')],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const icon = path.join(NCM_APP, 'Contents/Resources', iconName.endsWith('.icns') ? iconName : `${iconName}.icns`);
+    fs.copyFileSync(icon, path.join(contents, 'Resources/AppIcon.icns'));
+    return true;
+  } catch {
+    return false; // no icon is fine
+  }
+}
+
+// Nudge LaunchServices (and so Finder and the Dock) to read the bundle again.
+function refreshBundle(app) {
+  const now = new Date();
+  fs.utimesSync(app, now, now);
+  try {
+    execFileSync('/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister',
+      ['-f', app], { stdio: 'ignore' });
+  } catch { /* the touch is usually enough */ }
 }
 
 function bundleIdOf(app) {
@@ -288,6 +327,7 @@ function stableNodePath() {
 }
 
 function cmdInstallApp(values) {
+  if (STANDALONE_APP) fail(`${STANDALONE_APP} is self-contained; install-app is for a source checkout`);
   const app = appPath(values);
   if (fs.existsSync(app)) {
     if (bundleIdOf(app) !== WRAPPER_ID) fail(`${app} exists and is not a BetterNCM wrapper; not touching it`);
@@ -312,13 +352,7 @@ function cmdInstallApp(values) {
   fs.writeFileSync(exe, script, { mode: 0o755 });
   fs.chmodSync(exe, 0o755);
 
-  // Borrow NCM's icon (read only) so the Dock entry is recognisable.
-  try {
-    const iconName = execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', path.join(NCM_APP, 'Contents/Info.plist')],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-    const icon = path.join(NCM_APP, 'Contents/Resources', iconName.endsWith('.icns') ? iconName : `${iconName}.icns`);
-    fs.copyFileSync(icon, path.join(contents, 'Resources/AppIcon.icns'));
-  } catch { /* no icon is fine */ }
+  copyNcmIcon(contents);
 
   const now = new Date();
   fs.utimesSync(app, now, now); // nudge LaunchServices to pick up the bundle
@@ -340,8 +374,45 @@ function cmdInstallApp(values) {
   return 0;
 }
 
-function cmdUninstallApp(values) {
+// The self-contained app's first run on this Mac (its launcher runs this, and install.sh): NCM's
+// icon, which is not ours to ship, and a Dock icon. The app path it was set up at is kept in the
+// data dir: a moved or newly installed app is set up again, and a Dock icon the user took away
+// stays away.
+function cmdSetupApp(values) {
+  const app = STANDALONE_APP;
+  if (!app) fail('setup-app is for the self-contained BetterNCM.app; in a source checkout, use install-app');
+  const contents = path.join(app, 'Contents');
+  if (!fs.existsSync(path.join(contents, 'Resources/AppIcon.icns')) && copyNcmIcon(contents)) {
+    refreshBundle(app);
+    console.log("copied NetEase Cloud Music's icon");
+  }
+  let prev = null;
+  try { prev = fs.readFileSync(appPathMarker(), 'utf8'); } catch { /* first time */ }
+  if (prev === app) return 0;
+  if (prev && !fs.existsSync(prev)) unpinQuietly(prev); // moved: the old tile points nowhere
+  if (!values['no-dock']) {
+    try {
+      console.log(pinToDock(app) ? 'pinned to the Dock' : 'already in the Dock');
+    } catch (e) {
+      console.log(`could not pin it to the Dock (${e.message})`);
+    }
+  }
+  fs.mkdirSync(getDataPath(), { recursive: true });
+  fs.writeFileSync(appPathMarker(), app);
+  return 0;
+}
+
+// The app is gone, so a later install at the same place is set up (and pinned) again.
+function forgetAppPath(app) {
+  try {
+    if (fs.readFileSync(appPathMarker(), 'utf8') === app) fs.rmSync(appPathMarker(), { force: true });
+  } catch { /* none */ }
+}
+
+async function cmdUninstallApp(values) {
   const app = appPath(values);
+  // The self-contained app's injector runs from the bundle about to go.
+  if (STANDALONE_APP && app === STANDALONE_APP) await stopInjector();
   if (!fs.existsSync(app)) {
     console.log(`${app} is not installed`);
     unpinQuietly(app); // a Dock tile can outlive a bundle moved to the Trash
@@ -351,6 +422,7 @@ function cmdUninstallApp(values) {
   fs.rmSync(app, { recursive: true, force: true });
   console.log(`removed ${app}`);
   unpinQuietly(app);
+  forgetAppPath(app);
   return 0;
 }
 
@@ -360,17 +432,29 @@ function unpinQuietly(app) {
   } catch { /* a stale Dock icon is harmless */ }
 }
 
-async function cmdUninstall(values) {
+// Stops a running injector; fails (removing nothing else) if it will not stop.
+async function stopInjector() {
   const { liveState } = await import('../src/injector.mjs');
   const { isPidAlive } = await import('../src/launcher.mjs');
   const st = liveState();
-  if (st) {
-    console.log(`stopping the injector (pid ${st.injectorPid})`);
-    try { process.kill(st.injectorPid, 'SIGTERM'); } catch { /* already gone */ }
-    const deadline = Date.now() + 10000;
-    while (isPidAlive(st.injectorPid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 200));
-    if (isPidAlive(st.injectorPid)) fail(`the injector (pid ${st.injectorPid}) did not stop; nothing else was removed`);
-  }
+  if (!st) return false;
+  console.log(`stopping the injector (pid ${st.injectorPid})`);
+  try { process.kill(st.injectorPid, 'SIGTERM'); } catch { /* already gone */ }
+  const deadline = Date.now() + 10000;
+  while (isPidAlive(st.injectorPid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 200));
+  if (isPidAlive(st.injectorPid)) fail(`the injector (pid ${st.injectorPid}) did not stop; nothing else was changed`);
+  return true;
+}
+
+// install.sh runs this before it replaces the app: the injector reads its own app's files while
+// it runs. NCM keeps running with the debug port; the next launch attaches and reloads the page.
+async function cmdStop() {
+  if (!(await stopInjector())) console.log('the injector is not running');
+  return 0;
+}
+
+async function cmdUninstall(values) {
+  await stopInjector();
 
   const app = appPath(values);
   if (!fs.existsSync(app)) {
@@ -382,6 +466,7 @@ async function cmdUninstall(values) {
     fs.rmSync(app, { recursive: true, force: true });
     console.log(`removed ${app}`);
     unpinQuietly(app);
+    forgetAppPath(app);
   }
 
   if (values.purge) {
@@ -401,7 +486,7 @@ async function cmdUninstall(values) {
   console.log('NetEase Cloud Music itself was never modified. If it is running, quit it and open it');
   console.log('again from its own icon: that closes the debug port and starts it without BetterNCM.');
   if (!values.purge) console.log(`Plugins and settings are kept in ${getDataPath()} (uninstall --purge deletes them).`);
-  console.log(`This folder (${PROJECT_ROOT}) can be deleted by hand.`);
+  if (!STANDALONE_APP) console.log(`This folder (${PROJECT_ROOT}) can be deleted by hand.`);
   return 0;
 }
 
@@ -414,6 +499,7 @@ async function main() {
       dest: { type: 'string' },
       purge: { type: 'boolean' },
       dock: { type: 'boolean' },
+      'no-dock': { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
     },
@@ -441,7 +527,9 @@ async function main() {
     case 'doctor': return cmdDoctor();
     case 'reload': return cmdReload();
     case 'install-app': return cmdInstallApp(values);
+    case 'setup-app': return cmdSetupApp(values);
     case 'uninstall-app': return cmdUninstallApp(values);
+    case 'stop': return cmdStop();
     case 'uninstall': return cmdUninstall(values);
     default: fail(`unknown command: ${cmd}\n\n${USAGE}`);
   }

@@ -15,9 +15,19 @@ const OPTIONAL_PRELUDE = {
   'compat-rnp-layout.js': 'mac.rnpAppleStyle',
   'compat-rnp-cover.js': 'mac.rnpAppleStyle',
   'compat-rnp-top-controls.js': 'mac.rnpAppleStyle',
+  'compat-rnp-menu-style.js': 'mac.rnpAppleStyle',
+  'compat-rnp-panels.js': 'mac.rnpAppleStyle',
+  'compat-rnp-lyric-switch.js': 'mac.rnpAppleStyle',
   'stop-mini-vinyl.js': 'mac.stopMiniVinyl',
   'compat-rnp-lyric-size.js': 'mac.rnpAutoLyricSize',
+  'hide-plugin-manager.js': '!mac.pluginManager', // "!": runs unless the key is 'true'
 };
+
+function preludeWanted(name, cfg) {
+  const key = OPTIONAL_PRELUDE[name];
+  if (!key) return true;
+  return key.startsWith('!') ? cfg[key.slice(1)] !== 'true' : cfg[key] === 'true';
+}
 
 const missingWarned = new Set();
 
@@ -112,7 +122,7 @@ export function buildInjection({ targetId, apiKey, apiPort, safe = false, cfg = 
     if (code != null) out.push(wrapPart('channel-shim.js', code));
   }
   for (const name of extras) {
-    if (OPTIONAL_PRELUDE[name] && cfg[OPTIONAL_PRELUDE[name]] !== 'true') continue;
+    if (!preludeWanted(name, cfg)) continue;
     const code = prelude(name);
     if (code != null) out.push(wrapPart(name, code));
   }

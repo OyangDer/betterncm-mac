@@ -49,6 +49,7 @@ function resetProfile(withSamples = true) {
     fs.mkdirSync(d, { recursive: true });
   }
   fs.rmSync(path.join(DP, 'disable_list.txt'), { force: true });
+  fs.rmSync(path.join(DP, 'config.json'), { force: true });
   if (withSamples && haveSamples) for (const f of SAMPLE_FILES) fs.copyFileSync(path.join(SAMPLES, f + '.plugin'), path.join(PLUGINS, f + '.plugin'));
 }
 
@@ -146,8 +147,13 @@ make(sys.argv[2], [('manifest.json', sys.argv[4], 3, 0), ('esc', 'sub/../../outs
   assert.deepEqual(fs.readdirSync(RUNTIME), ['Bs']);
 });
 
+function showPluginManager() {
+  fs.writeFileSync(path.join(DP, 'config.json'), JSON.stringify({ 'mac.pluginManager': 'true' }));
+}
+
 test('an outdated PluginMarket is replaced by the bundled one', () => {
   resetProfile();
+  showPluginManager();
   makeZip(path.join(PLUGINS, 'PluginMarket.plugin'), {
     'manifest.json': manifestJson({ name: 'PluginMarket', version: '0.7.0', injects: { Main: [{ file: './main.js' }] } }),
     'main.js': '// old',
@@ -162,6 +168,7 @@ test('an outdated PluginMarket is replaced by the bundled one', () => {
 
 test('seedPluginMarket copies the market only when missing or outdated', () => {
   resetProfile();
+  showPluginManager();
   const dest = path.join(PLUGINS, 'PluginMarket.plugin');
   assert.equal(plugins.seedPluginMarket(), true);
   assert.ok(fs.existsSync(dest));
@@ -265,4 +272,52 @@ test('collectStartupScripts reads startup_script.js (or the manifest override) p
   assert.ok(!('sneaky' in bySlug));
   assert.ok(!('advanced-playbar' in bySlug)); // filtered out at 3.1.14, never extracted
   assert.deepEqual(scripts.map((s) => s.slug), [...scripts.map((s) => s.slug)].sort());
+});
+
+test('while the plugin manager is hidden, the market is neither seeded nor loaded', () => {
+  resetProfile(false);
+  assert.equal(plugins.seedPluginMarket(), false);
+  assert.ok(!fs.existsSync(path.join(PLUGINS, 'PluginMarket.plugin')));
+  fs.copyFileSync(path.join(PROJECT_ROOT, 'resources', 'PluginMarket.plugin'), path.join(PLUGINS, 'PluginMarket.plugin'));
+  const res = plugins.extractPackedPlugins({ ncmVersion: '3.1.14' });
+  assert.ok(!res.loaded.includes('PluginMarket'));
+  assert.match(res.skipped.find((x) => x.file === 'PluginMarket.plugin').reason, /mac\.pluginManager/);
+});
+
+test('the bundled RefinedNowPlayingNext is installed once, and not over another version', () => {
+  resetProfile(false);
+  assert.deepEqual(plugins.seedBundledPlugins(), ['RefinedNowPlayingNext-3.0.2.plugin']);
+  assert.ok(fs.existsSync(path.join(PLUGINS, 'RefinedNowPlayingNext-3.0.2.plugin')));
+  assert.ok(plugins.extractPackedPlugins({ ncmVersion: '3.1.14' }).loaded.includes('RefinedNowPlayingNext'));
+  // Deleted by the user: stays deleted.
+  fs.rmSync(path.join(PLUGINS, 'RefinedNowPlayingNext-3.0.2.plugin'));
+  assert.deepEqual(plugins.seedBundledPlugins(), []);
+  assert.ok(!fs.existsSync(path.join(PLUGINS, 'RefinedNowPlayingNext-3.0.2.plugin')));
+  // A data dir that already has some version (under any file name) keeps it.
+  resetProfile(false);
+  makeZip(path.join(PLUGINS, 'rnp-own.plugin'), { 'manifest.json': manifestJson({ name: 'RefinedNowPlayingNext', version: '3.1.0' }) });
+  assert.deepEqual(plugins.seedBundledPlugins(), []);
+  assert.deepEqual(fs.readdirSync(PLUGINS), ['rnp-own.plugin']);
+});
+
+test('bundled plugins are not installed over a plugins_dev copy or while config.json is broken', () => {
+  resetProfile(false);
+  fs.mkdirSync(path.join(DEV, 'my-rnp'), { recursive: true });
+  fs.writeFileSync(path.join(DEV, 'my-rnp', 'manifest.json'), manifestJson({ name: 'RefinedNowPlayingNext' }));
+  assert.deepEqual(plugins.seedBundledPlugins(), []);
+  assert.deepEqual(fs.readdirSync(PLUGINS), []);
+
+  resetProfile(false);
+  const broken = '{"mac.rnpAppleStyle": "false",}';
+  fs.writeFileSync(path.join(DP, 'config.json'), broken);
+  assert.deepEqual(plugins.seedBundledPlugins(), []);
+  assert.deepEqual(fs.readdirSync(PLUGINS), []);
+  assert.equal(fs.readFileSync(path.join(DP, 'config.json'), 'utf8'), broken, 'left for the user to fix');
+});
+
+test('turning the plugin manager on brings the market in at the next extraction', () => {
+  resetProfile(false);
+  assert.ok(!plugins.extractPackedPlugins({ ncmVersion: '3.1.14' }).loaded.includes('PluginMarket'));
+  showPluginManager();
+  assert.ok(plugins.extractPackedPlugins({ ncmVersion: '3.1.14' }).loaded.includes('PluginMarket'));
 });

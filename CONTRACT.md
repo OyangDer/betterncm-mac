@@ -46,11 +46,12 @@ Mac-only config keys, with these defaults:
 | `mac.allowExec` | `'false'` |
 | `mac.allowFsOutsideData` | `'false'` |
 | `mac.autoForceUpdate` | `'false'` |
-| `mac.rnpAppleStyle` | `'false'` (runs `compat-rnp-layout.js`, `compat-rnp-cover.js`, `compat-rnp-top-controls.js`) |
+| `mac.rnpAppleStyle` | `'true'` (runs `compat-rnp-layout.js`, `compat-rnp-cover.js`, `compat-rnp-top-controls.js`) |
 | `mac.stopMiniVinyl` | `'false'` (runs `stop-mini-vinyl.js`) |
-| `mac.rnpAutoLyricSize` | `'false'` (runs `compat-rnp-lyric-size.js`) |
+| `mac.rnpAutoLyricSize` | `'true'` (runs `compat-rnp-lyric-size.js`) |
+| `mac.pluginManager` | `'false'` (not `'true'`: runs `hide-plugin-manager.js`; PluginMarket is neither seeded nor loaded) |
 
-Not in the defaults (so not in `__BNCM_CFG__`): `mac.ncmApp` (NCM bundle path) and `mac.warnedNcmVersion` (last untested version warned about).
+Not in the defaults (so not in `__BNCM_CFG__`): `mac.ncmApp` (NCM bundle path), `mac.warnedNcmVersion` (last untested version warned about) and `mac.seeded.<plugin>` (`'true'` once a bundled plugin from `resources/` was offered to this data dir; see `seedBundledPlugins` in src/plugins.mjs).
 
 ## src/fsapi.mjs (owner: server)
 

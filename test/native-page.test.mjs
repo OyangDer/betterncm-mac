@@ -18,6 +18,7 @@ function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0, frames = fa
   const clicks = [];
   let observerCb = null;
   let onVisible = null;
+  const listeners = {};
   const bodyClasses = new Set(rnpOpen ? ['rnp-lyric-page-open'] : []);
   const styleProps = {};
   let collapseClicks = 0;
@@ -53,7 +54,7 @@ function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0, frames = fa
     document: {
       hidden: false,
       querySelector: (sel) => (sel === '#vinyl-page-container' ? container : sel === 'footer .miniVinylWrapper' ? cover : null),
-      addEventListener: (t, fn) => { if (t === 'visibilitychange') onVisible = fn; },
+      addEventListener: (t, fn) => { if (t === 'visibilitychange') onVisible = fn; else (listeners[t] ||= []).push(fn); },
       body: { classList: { contains: (c) => bodyClasses.has(c) }, appendChild: () => {} },
     },
   };
@@ -63,7 +64,13 @@ function load({ rnp = true, rnpOpen = false, collapseWorksAfter = 0, frames = fa
   const flush = () => { for (let i = 0; i < 50 && timers.length; i++) timers.shift()(); };
   const setHidden = (h) => { ctx.document.hidden = h; if (!h) onVisible?.(); };
   const frame = () => { const q = frameQueue.splice(0); q.forEach((fn) => fn()); };
-  return { log, open, flush, frame, clicks, styleProps, page, setHidden };
+  const close = () => { page.display = 'none'; observerCb?.(); };
+  const restyle = () => observerCb?.();
+  const shiftPress = () => {
+    const e = { shiftKey: true, target: { closest: (sel) => (sel === '.miniVinylWrapper' ? {} : null) } };
+    for (const fn of listeners.pointerdown || []) fn(e);
+  };
+  return { log, open, close, restyle, flush, frame, clicks, styleProps, page, setHidden, shiftPress, bodyClasses };
 }
 
 test('the stock page opening is replaced by RNPN and collapsed', () => {
@@ -160,4 +167,48 @@ test('retries wait for frames, so an undrawn window does not use them up', () =>
   p.frame();
   assert.equal(p.styleProps.visibility, undefined, 'unhidden once closed');
   assert.ok(!p.log.includes('warn'));
+});
+
+test('a shift-click opening is left alone until the page closes, however long that is', () => {
+  const p = load();
+  p.shiftPress();
+  p.open();
+  p.flush(); // the shift's time limit passes with the page open
+  p.restyle();
+  p.flush();
+  assert.deepEqual(p.log, []);
+  assert.equal(p.page.display, 'block');
+  p.close();
+  p.open(); // a later opening without shift is replaced again
+  p.flush();
+  assert.deepEqual(p.log, ['open-rnp', 'collapse']);
+});
+
+test('a shift press that opened nothing lapses', () => {
+  const p = load();
+  p.shiftPress();
+  p.flush();
+  p.open();
+  p.flush();
+  assert.deepEqual(p.log, ['open-rnp', 'collapse']);
+});
+
+test('the page compat-rnp-panels.js opens over RNPN is left alone', () => {
+  const p = load({ rnpOpen: true });
+  p.bodyClasses.add('bncm-rnp-panel');
+  p.open();
+  p.flush();
+  assert.deepEqual(p.log, []);
+  assert.equal(p.page.display, 'block');
+});
+
+test('a page compat-rnp-panels.js takes over mid-swap is left to it, shown again', () => {
+  const p = load({ rnpOpen: true });
+  p.open(); // swap starts: hidden, collapse queued
+  p.bodyClasses.add('bncm-rnp-panel');
+  p.flush();
+  assert.deepEqual(p.log, []);
+  assert.equal(p.page.display, 'block');
+  assert.equal(p.styleProps.visibility, undefined);
+  assert.equal(p.styleProps.opacity, undefined);
 });

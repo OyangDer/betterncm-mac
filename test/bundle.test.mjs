@@ -190,18 +190,25 @@ test('look-and-feel preludes only run when their config key is true', () => {
     'compat-rnp-layout.js': `window.__order.push('layout');`,
     'compat-rnp-cover.js': `window.__order.push('cover');`,
     'compat-rnp-top-controls.js': `window.__order.push('top');`,
+    'compat-rnp-menu-style.js': `window.__order.push('menustyle');`,
+    'compat-rnp-panels.js': `window.__order.push('panels');`,
+    'compat-rnp-lyric-switch.js': `window.__order.push('lyricswitch');`,
     'stop-mini-vinyl.js': `window.__order.push('vinyl');`,
     'compat-rnp-lyric-size.js': `window.__order.push('lyricsize');`,
+    'hide-plugin-manager.js': `window.__order.push('hidepm');`,
   };
   for (const [f, code] of Object.entries(optional)) fs.writeFileSync(path.join(root, 'src/prelude', f), code);
   try {
     const order = (cfg) => runPage(buildInjection(baseOpts({ cfg: { ...baseOpts().cfg, ...cfg } }))).__order;
     const off = order({});
     assert.ok(off.includes('extra'));
-    for (const n of ['layout', 'cover', 'top', 'vinyl', 'lyricsize']) assert.ok(!off.includes(n), `${n} ran without its key`);
-    assert.deepEqual(order({ 'mac.rnpAppleStyle': 'true' }).filter((n) => ['layout', 'cover', 'top', 'vinyl'].includes(n)), ['cover', 'layout', 'top']);
+    for (const n of ['layout', 'cover', 'top', 'menustyle', 'panels', 'lyricswitch', 'vinyl', 'lyricsize']) assert.ok(!off.includes(n), `${n} ran without its key`);
+    assert.deepEqual(order({ 'mac.rnpAppleStyle': 'true' }).filter((n) => ['layout', 'cover', 'top', 'menustyle', 'panels', 'lyricswitch', 'vinyl'].includes(n)), ['cover', 'layout', 'lyricswitch', 'menustyle', 'panels', 'top']);
     assert.deepEqual(order({ 'mac.stopMiniVinyl': 'true' }).filter((n) => ['layout', 'cover', 'vinyl'].includes(n)), ['vinyl']);
     assert.ok(order({ 'mac.rnpAutoLyricSize': 'true' }).includes('lyricsize'));
+    // "!key": runs unless the key is 'true'.
+    assert.ok(off.includes('hidepm'), 'hide-plugin-manager runs by default');
+    assert.ok(!order({ 'mac.pluginManager': 'true' }).includes('hidepm'));
   } finally {
     for (const f of Object.keys(optional)) fs.rmSync(path.join(root, 'src/prelude', f), { force: true });
   }

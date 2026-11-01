@@ -139,7 +139,7 @@ function call(name, args, arity) {
 Default `~/Library/Application Support/BetterNCM-mac/`, overridable with the env var `BETTERNCM_PROFILE` (same name as v2).
 
 ```
-plugins/            *.plugin (PluginMarket.plugin seeded from bncm-v2/resource/PluginMarket.plugin if missing)
+plugins/            *.plugin (resources/RefinedNowPlayingNext-3.0.2.plugin seeded once; PluginMarket.plugin seeded if missing while mac.pluginManager is 'true')
 plugins_runtime/<slug>/ (+ .plugin.path.meta)   wiped/rebuilt at injector start + reload_plugin; deleted on clean exit
 plugins_dev/<dir>/
 config.json          flat string->string

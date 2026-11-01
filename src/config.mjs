@@ -12,8 +12,17 @@ export const BUNDLE_ID = 'com.netease.163music';
 export const TESTED_NCM = '3.1.x';
 export const TESTED_NCM_LABEL = '3.1.14';
 export const BNCM_VERSION = '1.3.4';
-export const MAC_VERSION = '0.1.0';
 export const PROJECT_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+// package.json's version, the one `npm version` bumps for a release.
+export const MAC_VERSION = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')).version;
+// The self-contained BetterNCM.app (scripts/build-app.mjs) carries this project in
+// Contents/Resources/app and its own Node.js; null in a source checkout.
+export const STANDALONE_APP = standaloneApp(PROJECT_ROOT);
+
+export function standaloneApp(root) {
+  const app = path.resolve(root, '../../..');
+  return path.basename(app).endsWith('.app') && path.relative(app, root) === path.join('Contents', 'Resources', 'app') ? app : null;
+}
 
 // v2's key: disables startup scripts and hijacks (the framework calls this "safe mode").
 export const SAFE_MODE_KEY = 'cc.microblock.betterncm.cpp_side_inject_feature_disabled';
@@ -25,10 +34,15 @@ export const MAC_DEFAULTS = Object.freeze({
   'mac.allowExec': 'false',
   'mac.allowFsOutsideData': 'false',
   'mac.autoForceUpdate': 'false',
-  // Look-and-feel changes some like and some do not (src/bundle.mjs OPTIONAL_PRELUDE).
-  'mac.rnpAppleStyle': 'false',
+  // Look-and-feel changes (src/bundle.mjs OPTIONAL_PRELUDE). The RefinedNowPlayingNext ones are
+  // on unless set to 'false'; the mini vinyl keeps spinning unless stopMiniVinyl is 'true'.
+  'mac.rnpAppleStyle': 'true',
   'mac.stopMiniVinyl': 'false',
-  'mac.rnpAutoLyricSize': 'false',
+  'mac.rnpAutoLyricSize': 'true',
+  // BetterNCM's plugin manager and plugin market. Most market plugins do not work on macOS
+  // (Windows DLLs and programs, NCM 2 pages), and RefinedNowPlayingNext comes bundled, so the
+  // manager's button is hidden and the market not loaded unless this is 'true'.
+  'mac.pluginManager': 'false',
 });
 
 const DATA_SUBDIRS = ['plugins', 'plugins_runtime', 'plugins_dev', 'log', 'run'];
@@ -45,6 +59,22 @@ export function ensureDataDirs() {
 
 function configPath() {
   return path.join(getDataPath(), 'config.json');
+}
+
+// False when config.json exists but is not a JSON object (readConfig then reads it as {}).
+export function configParses() {
+  let text;
+  try {
+    text = fs.readFileSync(configPath(), 'utf8');
+  } catch {
+    return true; // missing reads as {} on purpose
+  }
+  try {
+    const obj = JSON.parse(text);
+    return !!obj && typeof obj === 'object' && !Array.isArray(obj);
+  } catch {
+    return false;
+  }
 }
 
 export function readConfig() {

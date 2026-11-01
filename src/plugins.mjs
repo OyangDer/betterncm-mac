@@ -2,11 +2,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import semver from '../vendor/semver/index.js'; // vendored (ISC), so a clone runs without npm install
-import { PROJECT_ROOT, getDataPath, getNcmVersion } from './config.mjs';
+import { PROJECT_ROOT, configParses, getDataPath, getNcmVersion, readConfigKey, writeConfigKey } from './config.mjs';
 import { log } from './log.mjs';
 import { readEntry, extractAll } from './zip.mjs';
 
 const MARKET_MIN_VERSION = '0.7.2';
+// Plugins shipped in resources/. RefinedNowPlayingNext 3.0.2 is the build the compat-rnp-*
+// preludes were made against (MIT, resources/RefinedNowPlayingNext-LICENSE.txt).
+const BUNDLED_PLUGINS = [
+  { name: 'RefinedNowPlayingNext', file: 'RefinedNowPlayingNext-3.0.2.plugin', key: 'mac.seeded.RefinedNowPlayingNext' },
+];
 const DEFAULT_NCM_REQ = '> 2.10.2';
 const DEFAULT_STARTUP_SCRIPT = 'startup_script.js';
 
@@ -52,8 +57,48 @@ function isOutdatedMarket(version) {
   return semver.lt(v, MARKET_MIN_VERSION, { loose: true });
 }
 
-// Copies the bundled PluginMarket.plugin into plugins/ when it is missing or older than 0.7.2.
+export function pluginManagerEnabled() {
+  return readConfigKey('mac.pluginManager') === 'true';
+}
+
+// Installs each bundled plugin once, unless some version of it is already there (packed, or in
+// plugins_dev). Done once per data dir (a config key), so a plugin the user deletes stays
+// deleted. Not while config.json does not parse: the key would read as unset, and writing it
+// would replace the user's broken file.
+export function seedBundledPlugins() {
+  if (!configParses()) {
+    log('[plugins] config.json does not parse; not installing bundled plugins');
+    return [];
+  }
+  const dp = getDataPath();
+  const dir = path.join(dp, 'plugins');
+  const seeded = [];
+  for (const p of BUNDLED_PLUGINS) {
+    if (readConfigKey(p.key, '') === 'true') continue;
+    fs.mkdirSync(dir, { recursive: true });
+    const packed = fs.readdirSync(dir).some((f) => {
+      if (!f.endsWith('.plugin')) return false;
+      try { return readZipManifest(path.join(dir, f)).name === p.name; } catch { return false; }
+    });
+    const dev = path.join(dp, 'plugins_dev');
+    const inDev = fs.existsSync(dev) && fs.readdirSync(dev).some((d) => {
+      try { return parseManifest(fs.readFileSync(path.join(dev, d, 'manifest.json'), 'utf8')).name === p.name; } catch { return false; }
+    });
+    const have = packed || inDev;
+    if (!have) {
+      fs.copyFileSync(path.join(PROJECT_ROOT, 'resources', p.file), path.join(dir, p.file));
+      log(`[plugins] installed the bundled ${p.file}`);
+      seeded.push(p.file);
+    }
+    writeConfigKey(p.key, 'true');
+  }
+  return seeded;
+}
+
+// Copies the bundled PluginMarket.plugin into plugins/ when it is missing or older than 0.7.2,
+// while the plugin manager is shown (mac.pluginManager).
 export function seedPluginMarket() {
+  if (!pluginManagerEnabled()) return false;
   const src = path.join(PROJECT_ROOT, 'resources', 'PluginMarket.plugin');
   const dest = path.join(getDataPath(), 'plugins', 'PluginMarket.plugin');
   if (!fs.existsSync(src)) {
@@ -122,6 +167,8 @@ export function extractPackedPlugins(opts = {}) {
   fs.mkdirSync(dp, { recursive: true });
   fs.writeFileSync(lock, '');
   try {
+    // The market follows mac.pluginManager wherever plugins are extracted again, not only at start.
+    try { seedPluginMarket(); } catch (e) { log('[plugins] seeding PluginMarket failed:', e.message); }
     const disabled = readDisableList();
 
     // wipe the previous runtime (no native DLLs can be locked on macOS)
@@ -138,6 +185,10 @@ export function extractPackedPlugins(opts = {}) {
         if (!fs.statSync(full).isFile()) continue;
         let m = readZipManifest(full);
 
+        if (m.name === 'PluginMarket' && !pluginManagerEnabled()) {
+          skip(file, 'the plugin manager is hidden (mac.pluginManager)');
+          continue;
+        }
         if (m.name === 'PluginMarket' && isOutdatedMarket(m.version)) {
           seedPluginMarket();
           if (file !== 'PluginMarket.plugin') {

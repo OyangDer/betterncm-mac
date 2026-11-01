@@ -8,7 +8,9 @@
 // at once, RNPN's page is opened the way RNPN expects (a click on .miniVinylWrapper, which its
 // capture listener takes and keeps from NCM), and the stock page is closed with its own collapse
 // button so it does not keep rendering underneath. Newer RNPN builds (not 3.0.2) let a
-// shift-click on the cover through to NCM on purpose; that one is left alone.
+// shift-click on the cover through to NCM on purpose; that one is left alone until it closes.
+// So is the page compat-rnp-panels.js opens over RNPN's to show NCM's 百科, 相似推荐 or comments
+// (<body> has PANEL_CLASS meanwhile).
 //
 // The clicks carry a real point, the target's center. RNPN's capture listener swallows any click
 // whose point lies in the play bar (<footer>) as a click on the bar, and while RNPN's page is
@@ -19,6 +21,8 @@
 const CONTAINER = '#vinyl-page-container';
 const COLLAPSE = '[data-testid="tid_vinyl_unfold_btn"], .close button';
 const PAGE_OPEN = 'rnp-lyric-page-open';
+const PANEL_CLASS = 'bncm-rnp-panel';
+const SHIFT_WAIT_MS = 1000; // how long a shift-click has to open the page
 const BIND_CHECK_MS = 2000; // re-find the container, re-check its state
 const COLLAPSE_RETRY_MS = 250; // while the collapse button is not rendered
 // After a click: NCM ignores the button while its page is still sliding in (~450ms), and its
@@ -31,6 +35,7 @@ let observer = null;
 let replacing = false;
 let stuck = false; // the stock page would not close; leave it until NCM hides it itself
 let shiftOpen = false;
+let wasShown = false;
 
 const rnpLoaded = () => !!window.loadedPlugins?.RefinedNowPlayingNext;
 const isShown = (el) => getComputedStyle(el).display !== 'none';
@@ -82,11 +87,14 @@ function onStyleChange() {
   if (!el || replacing) return;
   if (!isShown(el)) {
     stuck = false;
+    if (wasShown) shiftOpen = false; // the shift-opened page has closed
+    wasShown = false;
     return;
   }
+  wasShown = true;
   // NCM hides the page only at the end of its closing animation, and a hidden window plays no
   // animations; this runs again when the window shows.
-  if (stuck || shiftOpen || document.hidden || !rnpLoaded()) return;
+  if (stuck || shiftOpen || document.body.classList.contains(PANEL_CLASS) || document.hidden || !rnpLoaded()) return;
   replacing = true;
   hide(el);
   try {
@@ -100,6 +108,12 @@ function onStyleChange() {
   // invisible over everything.
   let tries = 0;
   const collapse = () => {
+    if (document.body.classList.contains(PANEL_CLASS)) {
+      // compat-rnp-panels.js took the page over meanwhile; it is its page now
+      unhide(el);
+      replacing = false;
+      return;
+    }
     if (isShown(el) && tries++ < COLLAPSE_TRIES) {
       const button = el.querySelector(COLLAPSE);
       if (button) click(button);
@@ -124,11 +138,12 @@ function bind() {
   observer.observe(el, { attributes: true, attributeFilter: ['style'] });
 }
 
-// NCM may open its page before the click event, so the shift is noted from the press on.
+// NCM may open its page before the click event, so the shift is noted from the press on. It
+// holds until the page closes again (onStyleChange), or lapses if the page never opened.
 const noteShift = (e) => {
   if (e.shiftKey && e.target?.closest?.('.miniVinylWrapper')) {
     shiftOpen = true;
-    setTimeout(() => { shiftOpen = false; }, 1000);
+    setTimeout(() => { if (!bound || !isShown(bound)) shiftOpen = false; }, SHIFT_WAIT_MS);
   }
 };
 for (const type of ['pointerdown', 'mousedown', 'click']) document.addEventListener(type, noteShift, true);
