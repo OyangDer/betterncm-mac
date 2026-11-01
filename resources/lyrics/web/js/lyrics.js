@@ -71,7 +71,9 @@ export function mountLyrics(column) {
     const structural = !old || ['showTranslation', 'showRomaji', 'karaoke', 'karaokeAnim', 'glow', 'contributors'].some((k) => s[k] !== old[k]);
     const sized = !old || ['fontSize', 'translationEm', 'romajiEm', 'bold'].some((k) => s[k] !== old[k]);
     if (structural) build(state.lyrics);
-    else if (sized || ['zoom', 'blur', 'fade', 'alignment', 'offset'].some((k) => s[k] !== old[k])) relayout(true);
+    else if (sized || ['zoom', 'blur', 'fade', 'alignment'].some((k) => s[k] !== old[k])) relayout(true);
+    // the offset moves the current line, not the layout; the clock is silent while paused
+    if (!structural && s.offset !== old.offset) tick(true);
   });
   watch('window', (w, old) => {
     // hidden: nothing to schedule; shown again: catch up at once

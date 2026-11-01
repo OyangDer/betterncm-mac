@@ -34,19 +34,24 @@ const BASE_CLASSES = ['refined-now-playing', 'no-material-you-theme', 'is-osx-ta
 const lyricCache = new Map();
 let lyricFor = '';
 async function loadLyrics(id) {
-  if (!id || id === '0' || id === lyricFor) return;
+  if (id && id === lyricFor) return;
+  // a track with no id (a local file) has no lyrics here: the column shows its empty state
+  if (!id || id === '0') { lyricFor = id || ''; set('lyrics', null); return; }
   lyricFor = id;
   if (lyricCache.has(id)) { set('lyrics', lyricCache.get(id)); return; }
   try {
     const raw = await ncmFetch(LYRIC_API(id));
-    if (raw?.data === -400 || lyricFor !== id) return;
+    // a late reply for a track already skipped changes nothing
+    if (lyricFor !== id) return;
+    if (raw?.data === -400) { set('lyrics', null); return; }
     const parsed = parseLyrics(raw, id);
     lyricCache.set(id, parsed);
     if (lyricCache.size > 20) lyricCache.delete(lyricCache.keys().next().value);
     set('lyrics', parsed);
   } catch (e) {
-    // RNPN keeps the previous lyrics when a fetch fails; so do we
-    lyricFor = '';
+    // RNPN keeps the previous lyrics when a fetch fails; so do we. Only the current track's failure
+    // clears lyricFor (so it can retry): a newer track's request keeps its own.
+    if (lyricFor === id) lyricFor = '';
     log('lyrics fetch failed:', id, String(e?.message || e));
   }
 }
@@ -76,8 +81,17 @@ on('host.window', (m) => {
   document.body.classList.toggle('bncm-fullscreen', !!m.fullscreen);
   if (m.visible && !was) send('snapshot');
 });
+// Covered by another window, on another Space or behind the lock screen, WebKit stops drawing the
+// shown window: the bridge holds progress until it is drawn again (state.window.visible, the
+// relay's open and close, is left alone).
+document.addEventListener('visibilitychange', () => {
+  if (state.window.visible) send('drawn', { v: document.visibilityState === 'visible' });
+});
 on('host.cover', (m) => {
-  set('cover', { url: m.url, cover: m.cover, bg: m.bg });
+  // a failed download: no cover and no background, but the url is recorded so the same track does
+  // not show the spinner again (a later resize or setting retries it)
+  if (m.failed) set('cover', { url: m.url, failed: true, cover: null, bg: null });
+  else set('cover', { url: m.url, cover: m.cover, bg: m.bg });
 });
 
 watch('track', (t, old) => {
@@ -99,6 +113,9 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
 });
+
+// A link or file dropped on the window must not navigate the page away.
+for (const type of ['dragover', 'drop']) document.addEventListener(type, (e) => e.preventDefault());
 
 // --- start -----------------------------------------------------------------------------------------
 async function start() {

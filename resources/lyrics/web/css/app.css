@@ -50,6 +50,15 @@ body.gradient-bg-dynamic.bncm-bg-paused #rnp-view .rnp-background-gradient > img
   100% { transform: translate(0, 0); }
 }
 
+/* The long title's marquee stops with the music and while the window is hidden (appearance.js). */
+body.bncm-motion-paused #rnp-view .n-single .mn .title .name.scroll .name-marquee-track { animation-play-state: paused; }
+
+/* RNPN's cover spinner is an animated SVG mask that WebKit redraws every frame even at opacity 0:
+   out of rendering except while loading and its fade-out (bncm-spin, side.js). */
+#rnp-view .n-single .cdimg:not(.loading):not(.bncm-spin)::before { display: none; }
+/* A cover that could not be downloaded leaves the image out (side.js renderCover). */
+#rnp-view .n-single .cdimg img[hidden] { display: none !important; }
+
 /* 文字阴影 / 辉光 (RNPN: filter: var(--rnp-drop-shadow) on the lyric lines, the title and the info):
    the same shadow drawn with the glyphs instead of a filter on each line, which gives every line
    its own surface re-rasterised as it moves (compat-rnp-perf.js does this for 辉光 inside NCM).

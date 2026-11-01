@@ -260,6 +260,8 @@ function onClick(e) {
     if (row.classList.contains('current')) send('toggle');
     else act({ action: 'wikiPlay', how: 'one', songs: [t], index: 0 });
   } else if (what === 'like') {
+    // a hand-off in flight would drop this one: leave the heart as it is rather than flip it back later
+    if (busy) return;
     const like = !ctx.liked[t.id];
     ctx.liked[t.id] = like;
     el.closest('button').classList.toggle('liked', like);

@@ -92,7 +92,7 @@ export function mountSide({ collapse }) {
   });
   watch('window', () => { layoutSide(); fitTitle(true); });
   onClock(() => scheduleProgress());
-  els.img.addEventListener('load', () => { els.cdimg.classList.remove('loading'); layoutSide(); });
+  els.img.addEventListener('load', () => { setLoading(false); layoutSide(); });
   new ResizeObserver(() => { layoutSide(); placeVolume(); }).observe(els.wrap);
   renderMode(state.mode);
   renderPlaying(state.playing);
@@ -252,18 +252,47 @@ export function requestCover() {
   const light = state.scheme === 'light';
   const url = coverUrl(t.cover);
   // a new cover is shown as loading until it arrives; a background-only re-render keeps the cover
-  if (state.cover?.url !== url) els.cdimg.classList.add('loading');
+  if (state.cover?.url !== url) setLoading(true);
   host('cover', { url, dim: (s.bgDim ?? 55) / 100, overlay: light ? '#fff' : '#000', blur: s.bgBlur ?? 90 });
 }
 
 function renderCover(c) {
   if (!c) return;
-  if (c.cover && els.img.getAttribute('src') !== c.cover) {
-    els.img.src = c.cover;
-    if (els.img.complete) els.cdimg.classList.remove('loading');
+  if (c.failed) {
+    // the download failed: no cover and no background rather than the previous song's (and no
+    // network placeholder, which would fail the same way offline)
+    setLoading(false);
+    els.img.removeAttribute('src');
+    els.img.hidden = true;
+    els.bg.style.backgroundImage = '';
+  } else {
+    els.img.hidden = false;
+    if (c.cover && els.img.getAttribute('src') !== c.cover) {
+      els.img.src = c.cover;
+      if (els.img.complete) setLoading(false);
+    }
+    if (c.bg) els.bg.style.backgroundImage = `url("${c.bg}")`;
   }
-  if (c.bg) els.bg.style.backgroundImage = `url("${c.bg}")`;
   applyCoverSettings();
+}
+
+// RNPN's spinner (.cdimg::before) is an animated SVG mask, which WebKit redraws every frame even at
+// opacity 0. bncm-spin keeps it in rendering only while loading and for its fade-out (.3 s after
+// .2 s); app.css takes it out otherwise.
+let spinTimer = 0;
+function setLoading(v) {
+  const c = els.cdimg.classList;
+  clearTimeout(spinTimer);
+  if (v) {
+    if (!c.contains('bncm-spin')) {
+      c.add('bncm-spin');
+      getComputedStyle(els.cdimg, '::before').opacity; // fade in from 0, as RNPN does
+    }
+    c.add('loading');
+  } else {
+    c.remove('loading');
+    if (c.contains('bncm-spin')) spinTimer = setTimeout(() => c.remove('bncm-spin'), 500);
+  }
 }
 
 function applyCoverSettings() {
@@ -278,9 +307,13 @@ function applyCoverSettings() {
   // RNPN's colourful cover shadow (St, B@332692): a blurred copy of the cover under it
   let st = document.getElementById('bncm-cover-shadow');
   if (!st) { st = document.createElement('style'); st.id = 'bncm-cover-shadow'; document.head.append(st); }
+  // the url goes in as a custom property, never into the stylesheet text, and only from our own schemes
   const src = state.cover?.cover;
-  st.textContent = s.coverShadow === 'colorful' && src ? `
-    .n-single .cdwrap::before { content: ""; position: absolute; inset: 0; background: url("${src}") center / cover;
+  const ok = typeof src === 'string' && /^(bncm|blob|https):/i.test(src);
+  if (ok) document.body.style.setProperty('--bncm-cover-url', `url(${JSON.stringify(src)})`);
+  else document.body.style.removeProperty('--bncm-cover-url');
+  st.textContent = s.coverShadow === 'colorful' && ok ? `
+    .n-single .cdwrap::before { content: ""; position: absolute; inset: 0; background: var(--bncm-cover-url) center / cover;
       filter: saturate(1.3) brightness(1.2) blur(25px); opacity: .6; border-radius: 16px;
       transform: ${s.coverShape === 'round' ? 'none' : 'translateY(4%)'}; }
     .n-single .cdimg { box-shadow: none !important; }` : '';
@@ -298,10 +331,15 @@ const fmt = (sec) => {
 
 function setProgressUi(pos) {
   const d = state.track?.duration || 0;
-  const max = Math.max(d, pos, 1);
-  els.thumb.style.width = `${(Math.min(pos, max) / max) * 100}%`;
   const tips = els.tips.children;
   tips[0].textContent = fmt(pos);
+  // no duration yet (a local file without one, FM before NCM knows it): an empty bar, no time left
+  if (d <= 0) {
+    els.thumb.style.width = '0%';
+    tips[tips.length - 1].textContent = '';
+    return;
+  }
+  els.thumb.style.width = `${(Math.min(pos, d) / d) * 100}%`;
   tips[tips.length - 1].textContent = `-${fmt(Math.max(d - pos, 0))}`;
 }
 
@@ -373,5 +411,24 @@ function addDislike(collapse) {
   // NCM's dislike opens a modal inside its own window, which this one covers
   btn.addEventListener('click', (e) => { e.stopPropagation(); send('dislike'); collapse(); });
   els.controls.append(btn);
-  watch('dislikeIcon', (svg) => { btn.innerHTML = svg || ''; });
+  watch('dislikeIcon', (svg) => { btn.replaceChildren(...[safeSvg(svg)].filter(Boolean)); });
+}
+
+// NCM's dislike icon is markup from the bridge (the outerHTML of its inline <svg>). It is parsed the
+// way it was serialised, as HTML, but in an inert document (nothing in it runs or loads), and kept
+// only as SVG elements without scripts, styles, animations, event handlers or non-local links.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function safeSvg(markup) {
+  if (typeof markup !== 'string' || !markup.trim()) return null;
+  const root = new DOMParser().parseFromString(markup, 'text/html').body.firstElementChild;
+  if (!root || root.localName !== 'svg' || root.namespaceURI !== SVG_NS) return null;
+  for (const el of root.querySelectorAll('*')) {
+    if (el.namespaceURI !== SVG_NS || /^(script|style|foreignObject|animate|animateMotion|animateTransform|set)$/.test(el.localName)) el.remove();
+  }
+  for (const el of [root, ...root.querySelectorAll('*')]) {
+    for (const a of [...el.attributes]) {
+      if (/^on/i.test(a.name) || (/href$/i.test(a.name) && !/^#/.test(a.value.trim()))) el.removeAttributeNode(a);
+    }
+  }
+  return document.importNode(root, true);
 }

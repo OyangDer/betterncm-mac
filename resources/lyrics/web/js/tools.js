@@ -83,7 +83,8 @@ export function mountTools({ collapse }) {
 function renderSwitcher() {
   if (!switcher) return;
   const avail = (id) => id === 'lyrics' || (state.track?.id && !state.track.local && (id !== 'comment' || state.track.threadId));
-  const shown = VIEWS.filter((v) => avail(v.id));
+  // the current view keeps its button even when this track has no such panel (it shows its empty state)
+  const shown = VIEWS.filter((v) => avail(v.id) || v.id === state.view);
   const rest = shown.filter((v) => v.id !== state.view);
   for (const b of switcher.querySelectorAll('button')) {
     const id = b.dataset.view;

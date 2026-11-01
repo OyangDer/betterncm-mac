@@ -2,6 +2,8 @@
 const handlers = new Map(); // type -> Set(fn)
 const pending = new Map(); // rid -> {resolve, reject, timer}
 let ridSeq = 0;
+// rids are unique per page load: a reply to a request from before a reload must not resolve a new one
+const BOOT = Math.random().toString(36).slice(2, 8);
 
 function post(msg) {
   try {
@@ -23,7 +25,7 @@ export function host(h, fields = {}) {
 
 /** A bridge command that answers with {t:'reply', rid}. */
 export function request(c, fields = {}, timeout = 15000) {
-  const rid = `r${++ridSeq}`;
+  const rid = `${BOOT}-${++ridSeq}`;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { pending.delete(rid); reject(new Error(`${c} timed out`)); }, timeout);
     pending.set(rid, { resolve, reject, timer });

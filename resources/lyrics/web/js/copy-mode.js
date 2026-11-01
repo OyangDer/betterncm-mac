@@ -73,9 +73,9 @@ function syncButton() {
 }
 
 function onEscape(e) {
-  // the "···" menu, when open, takes Esc first (a closing menu stays in the DOM for its fade, so
-  // ask menu.js rather than the DOM)
-  if (!on || e.defaultPrevented || isMenuOpen()) return;
+  // the "···" menu and the settings popover, when open, take Esc first (a closing menu stays in the
+  // DOM for its fade, so ask menu.js rather than the DOM; settings-ui.js loads lazily, so its body class)
+  if (!on || e.defaultPrevented || isMenuOpen() || document.body.classList.contains('bncm-settings-open')) return;
   e.preventDefault();
   toggleCopyMode(false);
 }
@@ -215,7 +215,8 @@ function currentAt(t) {
 }
 
 function update(instant) {
-  if (!on || !rows.length || unsynced) return;
+  // a hidden window does not wake per line; it catches up when shown again
+  if (!on || !rows.length || unsynced || !state.window.visible) return;
   clearTimeout(lineTimer);
   const t = lyricTime();
   const c = currentAt(t);
@@ -303,4 +304,10 @@ watch('settings', (s, old) => {
 });
 watch('playing', () => { if (on) update(false); });
 watch('view', (v) => { if (on && v !== 'lyrics') toggleCopyMode(false); });
-watch('window', () => { if (on) place(); });
+watch('window', (w, old) => {
+  if (!on) return;
+  if (!w.visible) { clearTimeout(lineTimer); return; }
+  place();
+  // only hidden -> shown: resizes send host.window too
+  if (old && !old.visible) update(true);
+});

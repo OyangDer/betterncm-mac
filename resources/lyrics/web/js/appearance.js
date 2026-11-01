@@ -171,6 +171,8 @@ function applyMotion() {
   const moving = state.settings?.bgType === 'gradient' && !!state.settings?.gradientDynamic
     && state.window.visible && state.playing;
   body().toggle('bncm-bg-paused', !moving);
+  // the title's marquee (app.css) runs whatever the background
+  body().toggle('bncm-motion-paused', !state.playing || !state.window.visible);
 }
 
 let resizeTimer = 0;
