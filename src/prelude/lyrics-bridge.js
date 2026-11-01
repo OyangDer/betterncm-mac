@@ -391,6 +391,7 @@ function installLyricsBridge() {
   function detach() {
     toStock();
     setActive(false);
+    unhideNcm(); // the injector is going away: NCM's window must not stay hidden
   }
 
   function clickEl(el) {
@@ -614,7 +615,23 @@ function installLyricsBridge() {
   // Hand the screen back to NCM: its window where the lyrics window was, raised.
   function showNcm(m) {
     moveNcm(m);
+    unhideNcm();
     winCall('winhelper.bringWindowToTop', []);
+    return true;
+  }
+  // While the lyrics window is in full screen (its own Space) NCM's window is hidden, as NCM's red
+  // button hides it, so the desktop does not keep a second player; it comes back when full screen ends.
+  let ncmHidden = false;
+  function hideNcm() {
+    ncmHidden = true;
+    winCall('winhelper.showWindow', ['hide']);
+    return true;
+  }
+  function unhideNcm(m) {
+    if (!ncmHidden) return false;
+    ncmHidden = false;
+    if (m) moveNcm(m);
+    winCall('winhelper.showWindow', ['show']);
     return true;
   }
 
@@ -707,6 +724,8 @@ function installLyricsBridge() {
     fallback: () => { toStock(); openStock(); return true; },
     // the injector is shutting down while NCM keeps running
     detach: () => { detach(); return true; },
+    hideNcm: () => hideNcm(),
+    unhideNcm: (m) => unhideNcm(m),
   };
 
   // Panel and menu actions handed to NCM: lyrics-actions-*.js preludes register them in

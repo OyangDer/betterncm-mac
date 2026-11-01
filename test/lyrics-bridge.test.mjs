@@ -575,6 +575,37 @@ test('minimizeNcm moves NCM to the window\'s frame first, without raising it', (
   assert.deepEqual(p.nativeCalls, [['winhelper.showWindow', ['minimize']]], 'already there');
 });
 
+test('NCM\'s window is hidden during full screen and comes back on unhide, collapse or detach', () => {
+  const p = load();
+  p.boot();
+  const frame = { x: 100, y: 76, w: 1200, h: 800 };
+  const cocoa = { x: 100, y: 80, w: 1200, h: 800 };
+  assert.equal(p.cmd({ c: 'unhideNcm', frame, cocoa }), false, 'not hidden: nothing to do');
+  assert.deepEqual(p.nativeCalls, []);
+  p.cmd({ c: 'hideNcm' });
+  assert.deepEqual(p.nativeCalls, [['winhelper.showWindow', ['hide']]]);
+  p.nativeCalls.length = 0;
+  p.cmd({ c: 'unhideNcm', frame, cocoa });
+  assert.deepEqual(p.nativeCalls, [
+    ['winhelper.setWindowPosition', [{ x: 100, y: 80, width: 1200, height: 800, topmost: false }]],
+    ['winhelper.setWindowSizeLimit', [{ x: 1056, y: 752 }, { x: 0, y: 0 }]],
+    ['winhelper.showWindow', ['show']],
+  ]);
+  p.nativeCalls.length = 0;
+  p.cmd({ c: 'unhideNcm', frame, cocoa });
+  assert.deepEqual(p.nativeCalls, [], 'shown once');
+  // collapsing while hidden shows it before raising it
+  p.cmd({ c: 'hideNcm' });
+  p.nativeCalls.length = 0;
+  p.cmd({ c: 'showNcm' });
+  assert.deepEqual(p.nativeCalls, [['winhelper.showWindow', ['show']], ['winhelper.bringWindowToTop', []]]);
+  // the injector going away while hidden
+  p.cmd({ c: 'hideNcm' });
+  p.nativeCalls.length = 0;
+  p.cmd({ c: 'detach' });
+  assert.deepEqual(p.nativeCalls, [['winhelper.showWindow', ['show']]]);
+});
+
 test('fetch goes to NCM\'s API hosts only', async () => {
   const p = load();
   p.boot();

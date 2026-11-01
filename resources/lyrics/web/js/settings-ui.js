@@ -39,6 +39,7 @@ const GROUPS = [
         title: '大小', rows: [
           { type: 'slider', k: 'fontSize', label: '歌词大小', help: '随窗口大小自动缩放', min: 16, max: 72, step: 1, preview: true },
           { type: 'slider', k: 'translationEm', label: '翻译大小', help: '相对歌词原文', min: 0.3, max: 1.5, step: 0.05, fmt: pct, auto: 0.8 },
+          { type: 'seg', k: 'translationWeight', label: '翻译字重', options: SEG([['regular', '常规'], ['medium', '中等'], ['semibold', '加粗']]) },
           { type: 'slider', k: 'romajiEm', label: '罗马音大小', help: '相对歌词原文', min: 0.3, max: 1.5, step: 0.05, fmt: pct },
           { type: 'switch', k: 'bold', label: '原文加粗' },
         ],

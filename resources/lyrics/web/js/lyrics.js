@@ -69,7 +69,7 @@ export function mountLyrics(column) {
   watch('settings', (s, old) => {
     applySettingClasses();
     const structural = !old || ['showTranslation', 'showRomaji', 'karaoke', 'karaokeAnim', 'glow', 'contributors'].some((k) => s[k] !== old[k]);
-    const sized = !old || ['fontSize', 'translationEm', 'romajiEm', 'bold'].some((k) => s[k] !== old[k]);
+    const sized = !old || ['fontSize', 'translationEm', 'romajiEm', 'bold', 'translationWeight'].some((k) => s[k] !== old[k]);
     if (structural) build(state.lyrics);
     else if (sized || ['zoom', 'blur', 'fade', 'alignment'].some((k) => s[k] !== old[k])) relayout(true);
     // the offset moves the current line, not the layout; the clock is silent while paused
@@ -94,6 +94,8 @@ function applySettingClasses() {
   const s = S();
   const b = document.body.classList;
   b.toggle('original-lyric-bold', !!s.bold);
+  b.toggle('bncm-tr-medium', s.translationWeight === 'medium');
+  b.toggle('bncm-tr-semibold', s.translationWeight === 'semibold');
   b.toggle('rnp-karaoke-animation-float', s.karaokeAnim !== 'slide');
   b.toggle('rnp-karaoke-animation-slide', s.karaokeAnim === 'slide');
   for (const t of ['sharp', 'easeout', 'lazy', 'smooth']) b.toggle(`rnp-lyric-animation-timing-${t}`, s.timing === t);

@@ -31,6 +31,13 @@ body:not(.bncm-roaming) #rnp-view .am-music-controls .bncm-rnp-dislike { display
   font-size: min(var(--lyric-translation-size-em, 1em), calc(0.62em + 6px));
   margin-top: 0.12em;
 }
+/* 翻译字重 (settings): RNPN draws translations regular, which reads thin next to a bold original. The
+   faces by name, as for bold text (app.css): WebKit's "PingFang SC" 500/600 is wider and heavier.
+   !important over RNPN's custom-font "inherit !important"; the variables carry the custom fonts first. */
+body.bncm-tr-medium #rnp-view .rnp-lyrics-line > div.rnp-lyrics-line-translated,
+body.bncm-tr-medium .bncm-copy .rnp-lyrics-overview-line > .rnp-lyrics-overview-line-translation { font-family: var(--bncm-font-medium) !important; font-weight: 500; }
+body.bncm-tr-semibold #rnp-view .rnp-lyrics-line > div.rnp-lyrics-line-translated,
+body.bncm-tr-semibold .bncm-copy .rnp-lyrics-overview-line > .rnp-lyrics-overview-line-translation { font-family: var(--bncm-font-semibold) !important; font-weight: 600; }
 #rnp-view .g-single-track .g-singlec-ct .n-single .mn { position: relative; }
 body:not(.bncm-vol-stock) #rnp-view .am-music-volume-controls {
   position: absolute;

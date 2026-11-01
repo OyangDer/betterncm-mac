@@ -49,8 +49,12 @@ function applyLook(s, old) {
   b.toggle('rnp-custom-font', s.font === 'custom' && s.fontList.length > 0);
   const custom = s.font === 'custom' && s.fontList.length ? s.fontList.map((f) => `"${f.replace(/"/g, '')}"`) : null;
   document.body.style.fontFamily = custom ? [...custom, '"PingFang SC"', 'arial', 'sans-serif'].join(', ') : '';
-  if (custom) document.body.style.setProperty('--bncm-font-semibold', [...custom, '"PingFang SC Semibold"', '"PingFang SC"', 'arial', 'sans-serif'].join(', '));
-  else document.body.style.removeProperty('--bncm-font-semibold');
+  for (const [v, face] of [['--bncm-font-semibold', 'Semibold'], ['--bncm-font-medium', 'Medium']]) {
+    // a custom "PingFang SC" (RNPN's lists often have it) would take WebKit's wider bold instance (app.css)
+    const named = custom?.map((f) => (f === '"PingFang SC"' ? `"PingFang SC ${face}"` : f));
+    if (named) document.body.style.setProperty(v, [...named, `"PingFang SC ${face}"`, '"PingFang SC"', 'arial', 'sans-serif'].join(', '));
+    else document.body.style.removeProperty(v);
+  }
   document.body.style.setProperty('--bg-dim-for-gradient-bg', String((s.gradientDim ?? 45) / 100));
   if (!applyScheme() && old && (s.bgBlur !== old.bgBlur || s.bgDim !== old.bgDim)) rerenderBackground();
   applyBackground();

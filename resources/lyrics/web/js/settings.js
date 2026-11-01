@@ -14,6 +14,7 @@ export const DEFAULTS = Object.freeze({
   // 歌词 · 大小
   fontSize: 32, // RNPN's lyric-font-size: px for a window as large as the screen, scaled down with it
   translationEm: 0, // 0: automatic, min(1em, 0.62em + 6px)
+  translationWeight: 'medium', // regular | medium | semibold; RNPN drew translations regular
   romajiEm: 0.6,
   bold: true,
   // 歌词 · 动效
@@ -50,6 +51,7 @@ export const DEFAULTS = Object.freeze({
 
 const ENUMS = {
   contributors: ['show', 'hover', 'hide'],
+  translationWeight: ['regular', 'medium', 'semibold'],
   karaokeAnim: ['float', 'slide'],
   timing: ['smooth', 'sharp', 'easeout', 'lazy'],
   scheme: ['auto', 'dark', 'light'],

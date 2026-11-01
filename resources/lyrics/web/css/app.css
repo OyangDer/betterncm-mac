@@ -9,11 +9,15 @@ body { -webkit-font-smoothing: subpixel-antialiased; }
 /* Bold text in PingFang's Semibold face by name, as NCM's Chromium draws it. Asked for as
    "PingFang SC" 600-700, WebKit takes another instance with wider advances (about 1.3% of the size
    per glyph) and heavier strokes, which wraps lyric lines and titles that fit in RNPN.
-   --bncm-font-semibold is set with the custom fonts (appearance.js). */
-body { --bncm-font-semibold: "PingFang SC Semibold", "PingFang SC", arial, "Segoe UI Emoji", "Segoe UI Symbol", sans-serif, simsun, "Mongolian Baiti"; }
+   --bncm-font-semibold is set with the custom fonts (appearance.js), so it is !important over RNPN's
+   custom-font rule (font-family: inherit !important in the lyric column and the title). */
+body {
+  --bncm-font-semibold: "PingFang SC Semibold", "PingFang SC", arial, "Segoe UI Emoji", "Segoe UI Symbol", sans-serif, simsun, "Mongolian Baiti";
+  --bncm-font-medium: "PingFang SC Medium", "PingFang SC", arial, "Segoe UI Emoji", "Segoe UI Symbol", sans-serif, simsun, "Mongolian Baiti";
+}
 body.original-lyric-bold .rnp-lyrics-line :is(.rnp-lyrics-line-karaoke, .rnp-lyrics-line-original),
 .rnp-lyrics-overview .rnp-lyrics-overview-line > .rnp-lyrics-overview-line-original,
-.g-single-track .g-singlec-ct .n-single .mn .head .inf .title h1 { font-family: var(--bncm-font-semibold); }
+.g-single-track .g-singlec-ct .n-single .mn .head .inf .title h1 { font-family: var(--bncm-font-semibold) !important; }
 
 /* RNPN's page is the whole window here and always "open". */
 #rnp-view { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
