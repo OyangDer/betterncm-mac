@@ -1,0 +1,311 @@
+/* 设置 (js/settings-ui.js): a popover under the top-right settings button, in the material of the
+   restyled "···" menu (compat-rnp-menu-style.js): the cover's background colour at half opacity over
+   a static blur, tinted text, accent-coloured controls. Only opacity and transform animate. */
+.bncm-settings {
+  --fg: var(--rnp-accent-color-shade-2-rgb, 255, 255, 255);
+  --bg: var(--rnp-accent-color-bg-rgb, 40, 40, 46);
+  --ac: var(--rnp-accent-color-shade-1-rgb, 238, 238, 238);
+  --t1: rgba(var(--fg), .94);
+  --t2: rgba(var(--fg), .62);
+  --t3: rgba(var(--fg), .46);
+  --line: rgba(var(--fg), .09);
+  --fill: rgba(var(--fg), .065);
+  --fill2: rgba(var(--fg), .12);
+  position: fixed;
+  top: 56px;
+  right: 14px;
+  z-index: 1000; /* above #rnp-view (998) */
+  width: min(488px, calc(100vw - 28px));
+  max-height: min(600px, calc(100vh - 70px));
+  display: flex;
+  box-sizing: border-box;
+  background: rgba(var(--bg), .5);
+  -webkit-backdrop-filter: blur(40px) saturate(1.6);
+  backdrop-filter: blur(40px) saturate(1.6);
+  border: .5px solid rgba(var(--fg), .16);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .3), 0 0 0 .5px rgba(0, 0, 0, .25);
+  overflow: hidden;
+  color: var(--t1);
+  font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  letter-spacing: 0;
+  text-align: left;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+  opacity: 0;
+  transform: translateY(-6px) scale(.985);
+  transform-origin: calc(100% - 60px) 0;
+  transition: opacity .16s ease, transform .2s ease;
+}
+.bncm-settings[hidden] { display: none; }
+.bncm-settings.open { opacity: 1; transform: none; transition: opacity .18s ease, transform .26s cubic-bezier(.2, .8, .2, 1); }
+.bncm-settings * { box-sizing: border-box; }
+.bncm-settings button { font: inherit; color: inherit; background: none; border: 0; margin: 0; padding: 0; cursor: default; -webkit-appearance: none; appearance: none; }
+.bncm-settings button:focus { outline: none; }
+.bncm-settings button:focus-visible,
+.bncm-settings input:focus-visible { outline: 2px solid rgba(var(--ac), .7); outline-offset: 1px; }
+.bncm-settings [hidden] { display: none !important; }
+.bncm-settings svg { display: block; flex: none; }
+
+/* --- sidebar ------------------------------------------------------------------------------------ */
+.bncm-set-side {
+  flex: none;
+  width: 132px;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(var(--fg), .035);
+  border-right: .5px solid var(--line);
+}
+.bncm-set-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--t2) !important;
+  white-space: nowrap;
+}
+.bncm-set-tab svg { width: 17px; height: 17px; opacity: .85; }
+.bncm-set-tab span { overflow: hidden; text-overflow: ellipsis; }
+.bncm-set-tab:hover { background: rgba(var(--fg), .06) !important; color: var(--t1) !important; }
+.bncm-set-tab.on { background: var(--fill2) !important; color: var(--t1) !important; font-weight: 500; }
+.bncm-set-tab.on svg { color: rgb(var(--ac)); opacity: 1; }
+
+/* --- pages -------------------------------------------------------------------------------------- */
+.bncm-set-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  padding: 6px 14px 18px;
+}
+.bncm-set-main::-webkit-scrollbar { width: 9px; }
+.bncm-set-main::-webkit-scrollbar-thumb { background: rgba(var(--fg), .16); border-radius: 9px; border: 3px solid transparent; background-clip: padding-box; }
+.bncm-set-page { display: none; }
+.bncm-set-page.on { display: block; }
+.bncm-set-title { font-size: 17px; font-weight: 600; margin: 8px 4px 2px; color: var(--t1); letter-spacing: .01em; }
+.bncm-set-section { margin-top: 14px; }
+.bncm-set-head { font-size: 11.5px; font-weight: 500; color: var(--t3); margin: 0 4px 6px; }
+.bncm-set-card { background: var(--fill); border-radius: 10px; overflow: hidden; }
+
+/* --- rows ---------------------------------------------------------------------------------------- */
+.bncm-set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 7px 12px;
+  position: relative;
+}
+/* hairline between visible rows, inset like macOS */
+.bncm-set-row:not([hidden]) ~ .bncm-set-row:not([hidden])::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 12px; right: 12px;
+  border-top: .5px solid var(--line);
+}
+.bncm-set-row.stack { flex-direction: column; align-items: stretch; gap: 8px; padding-top: 9px; padding-bottom: 10px; }
+.bncm-set-text { flex: 1; min-width: 0; }
+.bncm-set-label { font-size: 13px; color: var(--t1); }
+.bncm-set-help { font-size: 11.5px; color: var(--t3); margin-top: 2px; line-height: 1.4; }
+
+.bncm-set-value { color: var(--t2); font-variant-numeric: tabular-nums; white-space: nowrap; -webkit-user-select: text; user-select: text; }
+.bncm-set-note { color: var(--t2); font-size: 12px; line-height: 1.5; min-height: 0; padding-top: 10px; padding-bottom: 10px; }
+
+/* --- switch (iOS-like) ----------------------------------------------------------------------------- */
+.bncm-set-switch {
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px !important;
+  background: rgba(var(--fg), .2) !important;
+  transition: background-color .2s ease;
+}
+.bncm-set-switch i {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .36), 0 0 0 .5px rgba(0, 0, 0, .08);
+  transition: transform .22s cubic-bezier(.3, .7, .3, 1);
+}
+.bncm-set-switch[aria-checked="true"] { background: rgb(var(--ac)) !important; }
+.bncm-set-switch[aria-checked="true"] i { transform: translateX(16px); }
+
+/* --- segmented: a capsule with a sliding pill ----------------------------------------------------- */
+.bncm-set-seg {
+  --i: 0;
+  flex: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n), var(--w));
+  padding: 2px;
+  height: 28px;
+  border-radius: 14px;
+  background: rgba(var(--fg), .1);
+}
+.bncm-set-row.stack .bncm-set-seg { grid-template-columns: repeat(var(--n), 1fr); }
+.bncm-set-seg-pill {
+  position: absolute;
+  top: 2px; bottom: 2px; left: 2px;
+  width: calc((100% - 4px) / var(--n));
+  border-radius: 12px;
+  background: rgb(var(--ac));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+  transform: translateX(calc(var(--i) * 100%));
+}
+.bncm-set-seg.animate .bncm-set-seg-pill { transition: transform .24s cubic-bezier(.3, .7, .3, 1); }
+.bncm-set-seg.none .bncm-set-seg-pill { opacity: 0; }
+.bncm-set-seg button {
+  position: relative;
+  z-index: 1;
+  border-radius: 12px !important;
+  font-size: 12.5px;
+  color: var(--t2) !important;
+  white-space: nowrap;
+  transition: color .2s ease;
+}
+.bncm-set-seg button:hover { color: var(--t1) !important; }
+.bncm-set-seg button[aria-checked="true"] { color: rgb(var(--bg)) !important; font-weight: 600; }
+
+/* --- slider ---------------------------------------------------------------------------------------- */
+.bncm-set-head-line { display: flex; align-items: center; gap: 12px; }
+.bncm-set-val { flex: none; min-width: 34px; height: 24px; display: flex; align-items: center; justify-content: flex-end; color: var(--t2); font-variant-numeric: tabular-nums; }
+.bncm-set-aa { font-weight: 600; line-height: 1; color: var(--t1); }
+.bncm-set-slider-line { display: flex; align-items: center; gap: 8px; }
+.bncm-set-range {
+  --p: 50%;
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.bncm-set-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, rgb(var(--ac)) var(--p), rgba(var(--fg), .16) var(--p));
+}
+.bncm-set-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .32), 0 0 0 .5px rgba(0, 0, 0, .08);
+}
+.bncm-set-range.auto::-webkit-slider-runnable-track { background: rgba(var(--fg), .16); }
+.bncm-set-range.auto::-webkit-slider-thumb { background: rgba(255, 255, 255, .7); }
+.bncm-set-range:focus { outline: none; }
+
+/* the small reset button next to a slider or the offset stepper, shown when the value is changed */
+.bncm-set-reset {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid !important;
+  place-items: center;
+  border-radius: 50% !important;
+  color: var(--t3) !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease;
+}
+.bncm-set-reset svg { width: 14px; height: 14px; }
+.bncm-set-reset.shown { opacity: 1; pointer-events: auto; }
+.bncm-set-reset:hover { background: var(--fill2) !important; color: var(--t1) !important; }
+
+/* --- stepper (歌词偏移) ----------------------------------------------------------------------------- */
+.bncm-set-stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 2px;
+  border-radius: 14px;
+  background: rgba(var(--fg), .1);
+}
+.bncm-set-stepper button { width: 30px; height: 24px; display: grid !important; place-items: center; border-radius: 12px !important; color: var(--t1) !important; }
+.bncm-set-stepper button svg { width: 15px; height: 15px; }
+.bncm-set-stepper button:hover:not(:disabled) { background: var(--fill2) !important; }
+.bncm-set-stepper button:active:not(:disabled) { background: rgba(var(--fg), .2) !important; }
+.bncm-set-stepper button:disabled { opacity: .3; }
+.bncm-set-stepper-val { min-width: 62px; text-align: center; font-variant-numeric: tabular-nums; font-size: 12.5px; color: rgb(var(--ac)); font-weight: 600; }
+.bncm-set-stepper-val.zero { color: var(--t2); font-weight: 400; }
+
+/* --- fonts ------------------------------------------------------------------------------------------- */
+.bncm-set-fontlist { list-style: none; margin: 0; padding: 0; border-radius: 8px; background: rgba(var(--fg), .05); counter-reset: f; }
+.bncm-set-font { display: flex; align-items: center; gap: 2px; height: 34px; padding: 0 4px 0 10px; counter-increment: f; }
+.bncm-set-font + .bncm-set-font { border-top: .5px solid var(--line); }
+.bncm-set-font::before { content: counter(f); width: 16px; flex: none; color: var(--t3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.bncm-set-font-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--t1); }
+.bncm-set-font-zh { margin-left: 8px; font: 11.5px -apple-system, "PingFang SC", sans-serif; color: var(--t3); }
+.bncm-set-font.missing .bncm-set-font-name { color: var(--t2); }
+.bncm-set-icon { width: 26px; height: 26px; display: grid !important; place-items: center; border-radius: 50% !important; color: var(--t2) !important; }
+.bncm-set-icon svg { width: 15px; height: 15px; }
+.bncm-set-icon:hover:not(:disabled) { background: var(--fill2) !important; color: var(--t1) !important; }
+.bncm-set-icon:disabled { opacity: .25; }
+.bncm-set-fontadd { display: flex; gap: 8px; }
+.bncm-set-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 12px;
+  border: .5px solid rgba(var(--fg), .14);
+  border-radius: 14px;
+  background: rgba(var(--fg), .07);
+  color: var(--t1);
+  font: inherit;
+  font-size: 12.5px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.bncm-set-input::placeholder { color: var(--t3); }
+.bncm-set-input:focus { outline: none; border-color: rgba(var(--ac), .6); background: rgba(var(--fg), .1); }
+.bncm-set-input::-webkit-calendar-picker-indicator { opacity: .5; }
+.bncm-set-btn {
+  flex: none;
+  height: 28px;
+  padding: 0 14px !important;
+  border-radius: 14px !important;
+  background: rgb(var(--ac)) !important;
+  color: rgb(var(--bg)) !important;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.bncm-set-btn:disabled { background: rgba(var(--fg), .1) !important; color: var(--t3) !important; font-weight: 400; }
+.bncm-set-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bncm-set-chips:empty { display: none; }
+.bncm-set-chips-label { font-size: 11.5px; color: var(--t3); margin-right: 2px; }
+.bncm-set-chip { height: 24px; padding: 0 10px !important; border-radius: 12px !important; background: rgba(var(--fg), .08) !important; color: var(--t2) !important; font-size: 12px; }
+.bncm-set-chip:hover { background: var(--fill2) !important; color: var(--t1) !important; }
+
+/* --- 恢复默认设置 ----------------------------------------------------------------------------------------- */
+.bncm-set-resetall { align-items: center !important; text-align: center; }
+.bncm-set-danger { height: 28px; padding: 0 16px !important; border-radius: 14px !important; color: rgb(255, 105, 97) !important; font-weight: 500; }
+.bncm-set-danger:hover { background: rgba(255, 105, 97, .12) !important; }
+.bncm-set-danger.armed { background: rgb(255, 69, 58) !important; color: #fff !important; }
+.bncm-set-resetall .bncm-set-help { margin-top: -4px; }
+
+/* light pages: the material is light, the red needs more depth */
+body.rnp-light .bncm-settings, body.rnp-auto.rnp-system-light .bncm-settings { box-shadow: 0 16px 44px rgba(0, 0, 0, .18), 0 0 0 .5px rgba(0, 0, 0, .12); }
+body.rnp-light .bncm-set-danger, body.rnp-auto.rnp-system-light .bncm-set-danger { color: rgb(215, 0, 21) !important; }
+
+/* small windows: the sidebar keeps only its icons */
+@media (max-width: 600px) {
+  .bncm-set-side { width: 48px; padding: 12px 6px; }
+  .bncm-set-tab { justify-content: center; padding: 0; }
+  .bncm-set-tab span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bncm-settings, .bncm-settings.open, .bncm-settings * { transition: none !important; }
+}
