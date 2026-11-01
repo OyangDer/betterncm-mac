@@ -59,6 +59,7 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
   let prewarm = null;
   let disposed = false;
   let open = false;
+  let ncmHidden = false; // NCM's window hidden for the window's full screen (the bridge keeps its own flag too)
   const bound = new Set(); // sessions given the binding
   const evals = new Map();
   let evalSeq = 0;
@@ -145,6 +146,8 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
       if (gone) return;
       gone = true;
       log(`lyrics: host exited (${why})`);
+      // gone in full screen (also after dispose or ncmGone ended it): NCM's window was hidden
+      if (ncmHidden) { ncmHidden = false; evalInBridge({ c: 'unhideNcm' }); }
       if (host !== child) return;
       host = null;
       rejectPending('the lyrics window exited');
@@ -176,10 +179,14 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
     if (msg.from !== 'host') return;
     if (msg.op === 'closing') {
       open = false;
+      ncmHidden = false; // showNcm shows NCM's window if the bridge hid it
       await evalInBridge({ c: 'showNcm', frame: msg.frame, cocoa: msg.cocoa });
       // opened again meanwhile: the window stays
       setTimeout(() => { if (!open) toHost({ to: 'host', op: 'hide' }); }, HIDE_AFTER_NCM_MS);
       if (!open) evalInBridge({ c: 'active', v: false });
+    } else if (msg.op === 'fullscreen') {
+      // full screen is a Space of its own: NCM's window would stay behind on the desktop
+      if (msg.v) { if (open) { ncmHidden = true; evalInBridge({ c: 'hideNcm' }); } } else { ncmHidden = false; evalInBridge({ c: 'unhideNcm', frame: msg.frame, cocoa: msg.cocoa }); }
     } else if (msg.op === 'minimizing') {
       open = false;
       evalInBridge({ c: 'minimizeNcm', frame: msg.frame, cocoa: msg.cocoa });
@@ -199,7 +206,9 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
       if (fresh) log('lyrics: bridge ready');
       // A bridge left active by an injector that ended with the window open (killed, crashed)
       // would keep sending progress and keep NCM's play bar slowed.
-      if (!open) evalInBridge({ c: 'active', v: false });
+      // Likewise NCM's window left hidden by a window lost in full screen; the bridge only shows a
+      // window it hid itself, so this is a no-op otherwise.
+      if (!open) { evalInBridge({ c: 'active', v: false }); evalInBridge({ c: 'unhideNcm' }); }
       if (!host) {
         if (prewarmMs != null && !prewarm && !disposed) {
           prewarm = setTimeout(() => { prewarm = null; if (!disposed) startHost(); }, prewarmMs);
@@ -208,8 +217,10 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
         return;
       }
       toHost({ to: 'web', msg });
-      // NCM's page reloaded under the open window: its new bridge starts inactive
+      // NCM's page reloaded under the open window: its new bridge starts inactive, and does not know
+      // NCM's window is hidden for full screen
       if (open) evalInBridge({ c: 'active', v: true });
+      if (open && ncmHidden) evalInBridge({ c: 'hideNcm' });
       return;
     }
     // only the session that said hello runs the bridge
@@ -282,6 +293,8 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
       disposed = true;
       clearTimeout(prewarm);
       prewarm = null;
+      // before the host ends: a host told to quit does not leave full screen first
+      if (ncmHidden) { ncmHidden = false; evalInBridge({ c: 'unhideNcm' }); }
       if (open) evalInBridge({ c: 'active', v: false });
       open = false;
       rejectPending('the lyrics window was closed');
