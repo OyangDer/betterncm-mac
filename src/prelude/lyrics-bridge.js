@@ -728,7 +728,10 @@ function installLyricsBridge() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = STOCK_PAGE_CSS;
-  (document.head || document.documentElement).appendChild(style);
+  // a prelude runs before the document has an element to put it in
+  const addStyle = () => (document.head || document.documentElement).appendChild(style);
+  if (document.documentElement) addStyle();
+  else document.addEventListener('DOMContentLoaded', addStyle, { once: true });
 
   if (typeof window.__bncmChannelTap === 'function') {
     window.__bncmChannelTap(tap);

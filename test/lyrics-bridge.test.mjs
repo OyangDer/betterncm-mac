@@ -57,7 +57,7 @@ const TRACK = {
 /**
  * webpack: false = no webpack runtime (the store-watching fallback).
  */
-function load({ webpack = true, tap = true, state: initial = {}, cfg = 'true', href = 'orpheus://orpheus/app.html#/' } = {}) {
+function load({ webpack = true, tap = true, state: initial = {}, cfg = 'true', href = 'orpheus://orpheus/app.html#/', early = false } = {}) {
   const posts = [];
   const actions = [];
   const nativeCalls = [];
@@ -131,8 +131,9 @@ function load({ webpack = true, tap = true, state: initial = {}, cfg = 'true', h
   const footer = { '__reactInternalInstance$abc': { memoizedProps: {}, return: { memoizedProps: { store } } } };
   const document = {
     body: { classList: { add: (c) => bodyClasses.add(c), remove: (c) => bodyClasses.delete(c), contains: (c) => bodyClasses.has(c), toggle: (c, on) => (on ? bodyClasses.add(c) : bodyClasses.delete(c)) } },
-    head,
-    documentElement: head,
+    // early: as NCM runs a prelude, before the document has any element
+    head: early ? null : head,
+    documentElement: early ? null : head,
     createElement: (tag) => new Element(tag),
     getElementById: () => null,
     addEventListener: (t, fn, capture) => (listeners[t] ||= []).push({ fn, capture }),
@@ -177,6 +178,7 @@ function load({ webpack = true, tap = true, state: initial = {}, cfg = 'true', h
   ctx.webpackJsonp = vm.runInContext('[]', ctx);
   if (webpack) ctx.webpackJsonp.push = (entry) => { const [, mods, run] = entry; for (const [k] of run) mods[k]({}, {}, req); };
   vm.runInContext(CODE, ctx);
+  const domReady = () => { document.head = head; document.documentElement = head; (listeners.DOMContentLoaded || []).forEach((l) => l.fn()); };
 
   const emit = (cmd, args) => taps.forEach((f) => f(cmd, args));
   const progress = (pos, id = '1810227452') => emit('audioplayer.onPlayProgress', [id, pos.toFixed(2), '1.0000']);
@@ -189,9 +191,20 @@ function load({ webpack = true, tap = true, state: initial = {}, cfg = 'true', h
   const boot = () => advance(300 * 21);
   const ofType = (t) => posts.filter((p) => p.t === t);
   return { ctx, posts, ofType, actions, nativeCalls, fetches, consoleOut, advance, boot, setState, setPlaying, store, vinyl, history,
-    playlistModule, registered, cover, dom, dislikeBtn, playlistBtn, collapseBtn, bodyClasses, head, emit, progress, cmd, click, taps,
+    playlistModule, registered, cover, dom, dislikeBtn, playlistBtn, collapseBtn, bodyClasses, head, domReady, emit, progress, cmd, click, taps,
     get state() { return state; }, get now() { return now; } };
 }
+
+test('loads before the document has elements, as NCM runs preludes, and still boots', () => {
+  const b = load({ early: true });
+  assert.equal(b.consoleOut.length, 0, b.consoleOut.join('\n'));
+  assert.equal(b.head.children.length, 0, 'no style yet');
+  b.domReady();
+  assert.equal(b.head.children.length, 1, 'the stock-page style is added at DOMContentLoaded');
+  b.boot();
+  assert.equal(b.ctx.__bncmLyricsBridge.hooked, true);
+  assert.equal(b.ofType('hello').length, 1);
+});
 
 test('does nothing unless the lyrics window is configured, in NCM\'s main page', () => {
   assert.equal(load({ cfg: 'false' }).ctx.__bncmLyricsBridge, undefined);
