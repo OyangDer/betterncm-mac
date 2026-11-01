@@ -154,7 +154,8 @@ final class DragStrip: NSView {
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
             let action = UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") ?? "Maximize"
-            if action == "Minimize" { window?.performMiniaturize(nil) } else if action != "None" { window?.performZoom(nil) }
+            // minimize the way the yellow button does: the injector collapses to NCM and minimizes it
+            if action == "Minimize" { (NSApp.delegate as? Host)?.minimizeBoth() } else if action != "None" { window?.performZoom(nil) }
             return
         }
         window?.performDrag(with: event)
@@ -176,6 +177,8 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     var pendingToWeb: [[String: Any]] = []
     var lastBg: BgParams?
     var closing = false
+    var hiding = false     // "hide" arrived in full screen: order out once full screen is left
+    var entering = false   // on its way into full screen
     var closeTimer: Timer?
     var resizeTimer: Timer?
 
@@ -256,7 +259,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         guard m["to"] as? String == "host" else { return }
         switch m["op"] as? String {
         case "show": show(frame: m["frame"] as? [String: Any], fullscreen: m["fullscreen"] as? Bool ?? false)
-        case "hide": finishClose()
+        case "hide": hide()
         case "snapshot":
             // development: a PNG of the page at the window's backing scale
             let id = m["id"] ?? 0
@@ -296,6 +299,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     }
 
     func userContentController(_ uc: WKUserContentController, didReceive message: WKScriptMessage) {
+        // only our own page's main frame speaks for the page
+        let origin = message.frameInfo.securityOrigin
+        guard message.frameInfo.isMainFrame, origin.protocol == "bncm", origin.host == "app" else { return }
         guard let m = message.body as? [String: Any] else { return }
         guard let op = m["h"] as? String else { emit(["from": "web", "msg": m]); return }
         switch op {
@@ -330,7 +336,11 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         guard !p.url.isEmpty else { return }
         let size = web.bounds.size
         coverFile(for: p.url) { file in
-            guard let file else { return }
+            guard let file else {
+                // answer anyway, or the page keeps the previous cover with its spinner
+                DispatchQueue.main.async { if self.lastBg == p { self.toWeb(["t": "host.cover", "url": p.url, "failed": true]) } }
+                return
+            }
             workQueue.async {
                 let bg = renderBackground(cover: file, p: p, size: size)
                 DispatchQueue.main.async {
@@ -358,6 +368,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     func show(frame: [String: Any]?, fullscreen: Bool) {
         closing = false
+        hiding = false
         closeTimer?.invalidate()
         if !window.isVisible, let r = cocoaFrame(frame) { window.setFrame(r, display: false) }
         window.makeKeyAndOrderFront(nil)
@@ -383,6 +394,18 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         closeTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in self?.finishClose() }
     }
 
+    /// The injector's "hide". A window in full screen leaves it first, as in beginClose, or its Space
+    /// would stay behind empty.
+    func hide() {
+        if entering { hiding = true; return } // windowDidEnterFullScreen leaves it again
+        if window.styleMask.contains(.fullScreen) {
+            hiding = true
+            if !closing { closing = true; window.toggleFullScreen(nil) } // else beginClose is already leaving it
+            return
+        }
+        finishClose()
+    }
+
     func finishClose() {
         closeTimer?.invalidate()
         guard window.isVisible else { closing = false; return }
@@ -392,7 +415,12 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     }
 
     @objc func minimizeBoth() {
-        emit(["from": "host", "op": "minimizing"])
+        // like the yellow button, which full screen disables: ordering out would leave an empty Space
+        guard !window.styleMask.contains(.fullScreen) else { return }
+        // the frame NCM takes before it is minimized, as with "closing"
+        let f = window.frame
+        emit(["from": "host", "op": "minimizing", "frame": topLeftFrame(),
+              "cocoa": ["x": f.minX, "y": f.minY, "w": f.width, "h": f.height]])
         window.orderOut(nil)
         sendWindowState()
     }
@@ -432,17 +460,55 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
 
     func windowDidExitFullScreen(_ n: Notification) {
         sendWindowState()
-        if closing { closing = false; beginClose() }
+        if hiding { hiding = false; finishClose() } else if closing { closing = false; beginClose() }
     }
 
-    func windowDidEnterFullScreen(_ n: Notification) { sendWindowState() }
+    func windowDidFailToExitFullScreen(_ window: NSWindow) {
+        if hiding { hiding = false; finishClose() }
+    }
+
+    func windowWillEnterFullScreen(_ n: Notification) { entering = true }
+
+    func windowDidEnterFullScreen(_ n: Notification) {
+        entering = false
+        sendWindowState()
+        if hiding { closing = true; window.toggleFullScreen(nil) } // "hide" came while entering
+    }
+
+    func windowDidFailToEnterFullScreen(_ window: NSWindow) {
+        entering = false
+        if hiding { hiding = false; finishClose() }
+    }
+
+    // MARK: WKNavigationDelegate
+
+    static func isApp(_ url: URL?) -> Bool { url?.scheme == "bncm" && url?.host == "app" }
+
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        // the page and its frames stay on bncm://app: a dropped link or file must not replace it
+        if Host.isApp(action.request.url) { decisionHandler(.allow); return }
+        decisionHandler(.cancel)
+        if action.navigationType == .linkActivated, let url = action.request.url, ["http", "https"].contains(url.scheme ?? "") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        if !Host.isApp(webView.url) { reloadPage("lost the page to \(webView.url?.scheme ?? "?")") }
+    }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { log("page loaded") }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        log("web content process terminated; reloading")
+        reloadPage("web content process terminated")
+    }
+
+    /// Our page, fresh. Messages for it queue until it says "ready" again.
+    func reloadPage(_ why: String) {
+        log("\(why); reloading")
         pageReady = false
-        webView.reload()
+        web.load(URLRequest(url: URL(string: "bncm://app/index.html")!))
     }
 }
 
