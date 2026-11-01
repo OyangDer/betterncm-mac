@@ -50,9 +50,12 @@ on('progress', (m) => {
   notify(jumped ? 'jump' : 'tick');
 });
 
-on('state', (m) => {
+/** Play or pause from here on: the position so far is kept, so the clock does not count the time it was stopped. */
+export function setPlaying(v) {
   last = now();
   at = performance.now();
-  set('playing', !!m.playing);
+  set('playing', !!v);
   notify('state');
-});
+}
+
+on('state', (m) => setPlaying(m.playing));

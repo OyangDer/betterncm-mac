@@ -1,6 +1,6 @@
 // The lyrics window's page: RNPN's now-playing page, rebuilt to draw cheaply (LYRICS-WINDOW.md).
 import { host, ncmFetch, on, send, log } from './bus.js';
-import { setPosition } from './clock.js';
+import { setPosition, setPlaying } from './clock.js';
 import { mountLyrics } from './lyrics.js';
 import { parseLyrics } from './parse.js';
 import { mountSide, layoutSide } from './side.js';
@@ -39,6 +39,8 @@ async function loadLyrics(id) {
   if (!id || id === '0') { lyricFor = id || ''; set('lyrics', null); return; }
   lyricFor = id;
   if (lyricCache.has(id)) { set('lyrics', lyricCache.get(id)); return; }
+  // the previous song's lyrics must not stay up (or be copied) while this one's are fetched
+  if (state.lyrics) set('lyrics', null);
   try {
     const raw = await ncmFetch(LYRIC_API(id));
     // a late reply for a track already skipped changes nothing
@@ -49,22 +51,30 @@ async function loadLyrics(id) {
     if (lyricCache.size > 20) lyricCache.delete(lyricCache.keys().next().value);
     set('lyrics', parsed);
   } catch (e) {
-    // RNPN keeps the previous lyrics when a fetch fails; so do we. Only the current track's failure
-    // clears lyricFor (so it can retry): a newer track's request keeps its own.
+    // Only the current track's failure clears lyricFor, so retryLyrics fetches it again (a newer
+    // track's request keeps its own).
     if (lyricFor === id) lyricFor = '';
     log('lyrics fetch failed:', id, String(e?.message || e));
   }
 }
 
+// A failed fetch is tried again when the window is shown or a snapshot arrives (loadLyrics does
+// nothing for a track that is loaded or loading).
+function retryLyrics() {
+  if (state.track) loadLyrics(state.track.id);
+}
+
 // --- messages ---------------------------------------------------------------------------------------
 function applySnapshot(m) {
   if (m.track) set('track', m.track);
-  if (typeof m.playing === 'boolean') set('playing', m.playing);
+  // rebased: the clock must not count the time the window was closed as played
+  if (typeof m.playing === 'boolean') setPlaying(m.playing);
   if (typeof m.liked === 'boolean') set('liked', m.liked);
   if (m.mode) set('mode', m.mode);
   if (typeof m.volume === 'number') set('volume', m.volume);
   set('roaming', !!m.roaming);
   if (m.dislikeIcon) set('dislikeIcon', m.dislikeIcon);
+  retryLyrics();
 }
 
 on('snapshot', applySnapshot);
@@ -80,7 +90,7 @@ on('host.window', (m) => {
   const was = state.window.visible;
   set('window', { w: m.w, h: m.h, visible: !!m.visible, fullscreen: !!m.fullscreen });
   document.body.classList.toggle('bncm-fullscreen', !!m.fullscreen);
-  if (m.visible && !was) send('snapshot');
+  if (m.visible && !was) { send('snapshot'); retryLyrics(); }
 });
 // Covered by another window, on another Space or behind the lock screen, WebKit stops drawing the
 // shown window: the bridge holds progress until it is drawn again (state.window.visible, the

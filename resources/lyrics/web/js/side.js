@@ -89,6 +89,10 @@ export function mountSide({ collapse }) {
   watch('settings', (s, old) => {
     if (!old || s.subtitle !== old.subtitle) renderAlias();
     applyCoverSettings();
+    // a new face changes the title's width; appearance.js applies it after this watcher
+    if (old && (s.font !== old.font || String(s.fontList) !== String(old.fontList))) {
+      requestAnimationFrame(() => { fitTitle(true); document.fonts.ready.then(() => fitTitle(true)); });
+    }
   });
   watch('window', () => { layoutSide(); fitTitle(true); });
   onClock(() => scheduleProgress());
@@ -270,6 +274,9 @@ function renderCover(c) {
     if (c.cover && els.img.getAttribute('src') !== c.cover) {
       els.img.src = c.cover;
       if (els.img.complete) setLoading(false);
+    } else if (c.cover && els.img.complete) {
+      // the same cover again (A -> B -> A before B's arrived): no load event comes
+      setLoading(false);
     }
     if (c.bg) els.bg.style.backgroundImage = `url("${c.bg}")`;
   }

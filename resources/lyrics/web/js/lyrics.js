@@ -70,8 +70,11 @@ export function mountLyrics(column) {
     applySettingClasses();
     const structural = !old || ['showTranslation', 'showRomaji', 'karaoke', 'karaokeAnim', 'glow', 'contributors'].some((k) => s[k] !== old[k]);
     const sized = !old || ['fontSize', 'translationEm', 'romajiEm', 'bold', 'translationWeight'].some((k) => s[k] !== old[k]);
+    // the face is applied by appearance.js's watcher, which runs after this one: measure on the next frame
+    const face = old && (s.font !== old.font || String(s.fontList) !== String(old.fontList));
     if (structural) build(state.lyrics);
     else if (sized || ['zoom', 'blur', 'fade', 'alignment'].some((k) => s[k] !== old[k])) relayout(true);
+    if (face && !structural) requestAnimationFrame(() => { relayout(true); document.fonts.ready.then(() => relayout(true)); });
     // the offset moves the current line, not the layout; the clock is silent while paused
     if (!structural && s.offset !== old.offset) tick(true);
   });
@@ -494,8 +497,11 @@ function onPlayState() {
     if (lines[cur].words) startWords(lines[cur], t);
     if (lines[cur].dots) startDots(lines[cur], t);
   }
-  if (state.playing) tick(false);
-  else if (scrolling) clearTimeout(returnTimer);
+  if (state.playing) {
+    tick(false);
+    // scrolled while paused: playing returns to the current line as a wheel would
+    if (scrolling) { clearTimeout(returnTimer); returnTimer = setTimeout(() => endScrolling(), RETURN_MS); }
+  } else if (scrolling) clearTimeout(returnTimer);
 }
 
 // --- wheel scrolling (RNPN lyrics.js:537-606) --------------------------------------------------
@@ -528,7 +534,8 @@ function endScrolling(delay = 0) {
 
 function onLineClick(e) {
   const el = e.target.closest('.rnp-lyrics-line');
-  if (!el || box.classList.contains('pure-music')) return;
+  // unsynced lyrics have no times (parse.js gives them 999999999)
+  if (!el || box.classList.contains('pure-music') || model?.unsynced) return;
   const line = model?.lyrics[Number(el.dataset.i)];
   if (!line || line.isInterlude) return;
   const sec = (line.time + 50 - (S().offset || 0)) / 1000;
