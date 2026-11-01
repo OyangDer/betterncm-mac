@@ -1,0 +1,169 @@
+/* The "···" menu (js/menu.js), drawn as compat-rnp-menu-style.js drew NCM's menu on RNPN's page:
+   a translucent material tinted with the cover's colour, text only, 28px rows, a rounded
+   highlight. It is a child of <body>, where RNPN's stylesheet resolves the accent variables for
+   the current scheme, so it follows light and dark. Also the toast and the copy mode. */
+.bncm-menu {
+  --fg: var(--rnp-accent-color-shade-2-rgb, 255, 255, 255);
+  --bg: var(--rnp-accent-color-bg-rgb, 40, 40, 46);
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000; /* #rnp-view is 998 */
+  box-sizing: border-box;
+  min-width: 200px;
+  max-width: 340px;
+  padding: 5px 0;
+  background: rgba(var(--bg), 0.5);
+  -webkit-backdrop-filter: blur(40px) saturate(1.6);
+  backdrop-filter: blur(40px) saturate(1.6);
+  border: 0.5px solid rgba(var(--fg), 0.16);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+  color: rgba(var(--fg), 0.92);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 28px;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0;
+  transform: scale(0.94);
+}
+.bncm-menu.shown {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.14s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.bncm-menu.closing { transition: opacity 0.12s ease; }
+.bncm-submenu { min-width: 132px; z-index: 1001; }
+body.rnp-light > .bncm-menu,
+body.rnp-auto.rnp-system-light > .bncm-menu { box-shadow: 0 12px 36px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.12); }
+
+.bncm-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 28px;
+  margin: 0 5px;
+  padding: 0 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.bncm-menu-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bncm-menu-detail { flex: none; color: rgba(var(--fg), 0.5); font-variant-numeric: tabular-nums; }
+.bncm-menu-chevron { flex: none; width: 10px; height: 10px; margin-right: -3px; color: rgba(var(--fg), 0.7); }
+.bncm-menu-chevron svg,
+.bncm-menu-check svg { display: block; width: 100%; height: 100%; }
+.bncm-submenu .bncm-menu-item { gap: 0; padding-left: 6px; }
+.bncm-menu-check { flex: none; width: 12px; height: 12px; margin-right: 8px; }
+.bncm-menu-item.active,
+.bncm-menu-item.open { background: rgba(var(--fg), 0.14); color: rgb(var(--fg)); }
+.bncm-menu-item.disabled { color: rgba(var(--fg), 0.35); }
+.bncm-menu-sep { height: 1px; margin: 5px 15px; background: rgba(var(--fg), 0.14); }
+
+/* The "···" button stays tinted while its menu is open. */
+#rnp-view .rnp-info-more-button.bncm-menu-open { background: rgba(var(--rnp-accent-color-shade-2-rgb), 0.1) !important; }
+
+/* --- toast ----------------------------------------------------------------------------------- */
+.bncm-toast {
+  --fg: var(--rnp-accent-color-shade-2-rgb, 255, 255, 255);
+  --bg: var(--rnp-accent-color-bg-rgb, 40, 40, 46);
+  position: fixed;
+  left: 50%;
+  bottom: 48px;
+  z-index: 1002;
+  padding: 0 16px;
+  height: 34px;
+  line-height: 34px;
+  border-radius: 17px;
+  background: rgba(var(--bg), 0.72);
+  border: 0.5px solid rgba(var(--fg), 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  color: rgba(var(--fg), 0.92);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: opacity 0.2s ease, transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.bncm-toast.shown { opacity: 1; transform: translate(-50%, 0); }
+
+/* --- copy mode (js/copy-mode.js): RNPN's overview, a static list in place of the lyric column -- */
+.bncm-copy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: none;
+  pointer-events: none; /* the lyric switches (译 / 音) stay reachable beside the list */
+}
+.bncm-copy > * { pointer-events: auto; }
+body.bncm-copy-mode[data-bncm-view="lyrics"] .bncm-copy,
+body.bncm-copy-mode:not([data-bncm-view]) .bncm-copy { display: block; }
+body.bncm-copy-mode #rnp-view .lyric > .rnp-lyrics:not(.rnp-lyrics-overview-container),
+body.bncm-copy-mode #rnp-view .lyric > .rnp-lyrics-scrollbar { visibility: hidden; pointer-events: none; }
+/* RNPN's overview container is absolutely placed in the column; here it sits where the lyrics do
+   (copy-mode.js sets the box from .rnp-lyrics). */
+.bncm-copy .rnp-lyrics-overview-container {
+  left: var(--bncm-copy-left, 0px);
+  top: var(--bncm-copy-top, 0px);
+  width: var(--bncm-copy-width, 100%);
+  height: var(--bncm-copy-height, 100%);
+  max-height: none;
+  max-width: none;
+  margin: 0; /* the box above is measured with its margin already */
+  cursor: text;
+}
+.bncm-copy .rnp-lyrics-overview { width: 100%; }
+.bncm-copy .rnp-lyrics-overview-line { position: relative; cursor: default; }
+/* RNPN draws its shadow on every line with a filter, each line its own layer; a text-shadow is
+   drawn with the glyphs (as app.css does for the lyric lines). */
+body.rnp-shadow .bncm-copy .rnp-lyrics-overview-line > div,
+body.rnp-text-glow .bncm-copy .rnp-lyrics-overview-line > div { filter: none !important; }
+body.rnp-shadow .bncm-copy .rnp-lyrics-overview-line > div { text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); }
+body.rnp-text-glow .bncm-copy .rnp-lyrics-overview-line > div { text-shadow: 0 2px 8px rgba(var(--rnp-accent-color-shade-2-rgb), 0.27); }
+.bncm-copy .rnp-lyrics-overview-line > .rnp-lyrics-overview-line-translation { font-size: min(var(--lyric-translation-size-em, 1em), calc(0.62em + 6px)); margin-top: 0.12em; }
+.bncm-copy .rnp-lyrics-overview-line > .rnp-lyrics-overview-line-romaji { margin-top: 0.12em; }
+/* Lines are clickable (seek): a tint under the pointer, as on the lyric lines. */
+.bncm-copy .rnp-lyrics-overview-line:not(.interlude)::before {
+  content: "";
+  position: absolute;
+  inset: -6px -12px;
+  border-radius: 10px;
+  background: rgb(var(--rnp-accent-color-shade-2-rgb));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.bncm-copy.unsynced .rnp-lyrics-overview-line::before { display: none; }
+.bncm-copy:not(.selecting) .rnp-lyrics-overview-line:not(.interlude):hover::before { opacity: 0.06; }
+
+.bncm-copy-actions {
+  position: absolute;
+  right: var(--bncm-copy-right, 40px);
+  bottom: 28px;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+}
+.bncm-copy-btn {
+  --fg: var(--rnp-accent-color-shade-2-rgb, 255, 255, 255);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px 0 11px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(var(--fg), 0.12);
+  color: rgba(var(--fg), 0.88);
+  font: inherit;
+  font-size: 13px;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.bncm-copy-btn:hover { background: rgba(var(--fg), 0.18); color: rgb(var(--fg)); }
+.bncm-copy-btn:active { background: rgba(var(--fg), 0.24); }
+.bncm-copy-btn svg { width: 16px; height: 16px; display: block; }
