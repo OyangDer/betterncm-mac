@@ -23,6 +23,8 @@ const OPTIONAL_PRELUDE = {
   'hide-plugin-manager.js': '!mac.pluginManager', // "!": runs unless the key is 'true'
   'lyrics-bridge.js': 'mac.lyricsWindow',
 };
+// The bridge's action files (lyrics-actions-*.js) go with it.
+const LYRICS_PRELUDE = /^lyrics-/;
 // The lyrics window replaces RefinedNowPlayingNext, so everything made for RNPN's page stays out
 // while it is on.
 const RNP_PRELUDE = /^compat-rnp-/;
@@ -33,6 +35,7 @@ function keyHolds(key, cfg) {
 
 function preludeWanted(name, cfg) {
   if (RNP_PRELUDE.test(name) && cfg['mac.lyricsWindow'] === 'true') return false;
+  if (LYRICS_PRELUDE.test(name) && cfg['mac.lyricsWindow'] !== 'true') return false;
   const key = OPTIONAL_PRELUDE[name];
   return !key || keyHolds(key, cfg);
 }

@@ -1,28 +1,49 @@
 // The lyrics window's bridge in NCM's page (LYRICS-WINDOW.md; config mac.lyricsWindow).
 //
 // It has no UI. While the window is closed it only watches for the lyric page being asked for:
-// a click on the play bar's cover, or NCM's own now-playing page starting to open by any other
-// way (menus, shortcuts, sagas). While the window shows, it sends the track, the play state and
-// progress at 4 Hz, and runs the window's commands in NCM's page.
+// every way NCM opens its own now-playing (vinyl) page ends in one RxJS BehaviorSubject being set
+// to 'opening', so that subject's next() is wrapped and the window opens instead. When the
+// subject cannot be found (another NCM build), a click on the play bar's cover is caught, and NCM's
+// page starting to open by any other way is seen in the store and collapsed again. While the
+// window shows, it sends the track, the play state and progress at 4 Hz, and runs the window's
+// commands in NCM's page, through NCM's own dva effects where NCM has them.
 //
 // Messages go out through the CDP binding __bncmLyricsPost (src/lyrics-window.mjs); commands come
 // in as window.__bncmLyricsBridge.cmd(msg), evaluated by the injector.
 
 const POST = '__bncmLyricsPost';
 const OPEN_CLASS = 'bncm-lyrics-open'; // the window covers NCM's; channel-shim.js slows NCM's play bar
+const STOCK_CLASS = 'bncm-stock-vinyl'; // NCM's own page may open (shift-click, fallback)
+const PANEL_CLASS = 'bncm-rnp-panel'; // compat-rnp-panels.js opens NCM's page on purpose
 const STYLE_ID = 'bncm-lyrics-bridge';
 const CONTAINER = '#vinyl-page-container';
+const COVER = 'footer .miniVinylWrapper, footer [data-testid="tid_btn_pc_minibar_vinyl"]';
 const COLLAPSE = '[data-testid="tid_vinyl_unfold_btn"], .close button';
+const DISLIKE_BTN = 'footer [data-testid="tid_fmdislike_btn"]';
+const PLAYLIST_BTN = 'footer [data-testid="tid_playbar_playlist_btn"]';
 const PROGRESS_MS = 250;
+const CHECK_DELAY_MS = 30;
+const STOCK_GRACE_MS = 1500; // a shift-click that opened nothing stops letting NCM's page through
 const FETCH_HOSTS = /^https:\/\/(music\.163\.com|interface\d*\.music\.163\.com)\//;
 const PROGRESS = 'audioplayer.onPlayProgress';
 const PLAY_STATE = 'audioplayer.onPlayState';
 const LOAD = 'audioplayer.onLoad';
-const VOLUME = 'audioplayer.onVolume';
+const NCM_MIN = { w: 1056, h: 752 }; // NCM's own window minimum (its module 35 .b), if not found
 
-// Shift-click on the play bar's cover still opens NCM's own page (百科 etc. in NCM's own look).
+// NCM's play modes and the order its play-bar button cycles them (app chunk, module 252 .t).
+const MODE_OF = { playOrder: 'order', playCycle: 'repeat', playOneCycle: 'one', playRandom: 'random', playAi: 'ai' };
+const CYCLE_AI = ['playAi', 'playCycle', 'playOneCycle', 'playRandom', 'playOrder'];
+const CYCLE = ['playOrder', 'playCycle', 'playOneCycle', 'playRandom'];
+const CYCLE_TOGETHER = ['playCycle', 'playOneCycle', 'playRandom'];
+const FM = 'playFm';
+const DOLBY = 2999; // resourcePlayingQuality: 128 192 320 999 1999 2999 dolby 3999 4999 5999 6999
+const QUALITY_NAME = { 64: '64acc', 128: 'standard', 192: 'higher', 320: 'exhigh', 999: 'lossless', 1999: 'hires',
+  2999: 'dolby', 3999: 'jyeffect', 4999: 'jymaster', 5999: 'sky', 6999: 'vivid' };
+
+// NCM's own page stays invisible unless it is meant to show (shift-click, fallback); in the
+// fallback path it starts to open before it can be collapsed again.
 const STOCK_PAGE_CSS = `
-body:not(.bncm-stock-vinyl) ${CONTAINER} { visibility: hidden !important; }
+body:not(.${STOCK_CLASS}):not(.${PANEL_CLASS}) ${CONTAINER} { visibility: hidden !important; }
 `;
 
 function installLyricsBridge() {
@@ -33,29 +54,79 @@ function installLyricsBridge() {
   const post = (m) => {
     try { if (typeof window[POST] === 'function') window[POST](JSON.stringify(m)); } catch { /* injector gone */ }
   };
+  const hasClass = (c) => !!document.body?.classList.contains(c);
+
+  // --- NCM's modules (webpack require) ------------------------------------------------------
+  // Module ids differ between NCM builds, so the modules are found by their shape.
+  let wreq = null;
+  function webpackRequire() {
+    if (wreq) return wreq;
+    const jp = window.webpackJsonp;
+    // only once webpack's runtime has taken the array over; a push before would be run later
+    if (!Array.isArray(jp) || jp.push === Array.prototype.push) return null;
+    const key = `__bncmLyrics${Date.now()}`;
+    try { jp.push([[key], { [key]: (m, e, r) => { wreq = r; } }, [[key]]]); } catch { /* not ready */ }
+    return wreq;
+  }
+
+  const ncm = { app: null, vinyl: null, vinylState: null, minSize: null, playlist: null };
+  function scanModules() {
+    const r = webpackRequire();
+    const cache = r?.c;
+    if (!cache) return false;
+    for (const id of Object.keys(cache)) {
+      const ex = cache[id]?.exports;
+      if (!ex || (typeof ex !== 'object' && typeof ex !== 'function')) continue;
+      let keys;
+      try { keys = Object.keys(ex); } catch { continue; }
+      let states = null;
+      const subjects = [];
+      for (const k of keys) {
+        // a getter of a module still evaluating, or a proxy, may throw
+        try {
+          const v = ex[k];
+          if (!v || (typeof v !== 'object' && typeof v !== 'function')) continue;
+          if (v.opening === 'opening' && v.closed === 'closed' && v.opened === 'opened') states = v;
+          else if (typeof v.next === 'function' && typeof v.getValue === 'function' && typeof v.subscribe === 'function') subjects.push(v);
+          else if (!ncm.app && typeof v.getStore === 'function' && typeof v.getDispatch === 'function' && typeof v.getHistory === 'function') ncm.app = v;
+          else if (!ncm.minSize && v.minWidth > 0 && v.minHeight > 0 && 'leftSideMinWidth' in v) ncm.minSize = { w: v.minWidth, h: v.minHeight };
+          else if (!ncm.playlist && typeof v.openPlaylist === 'function') ncm.playlist = v;
+        } catch { /* not one of ours */ }
+      }
+      if (states && !ncm.vinyl) {
+        const values = Object.values(states);
+        const s = subjects.find((x) => { try { return values.includes(x.getValue()); } catch { return false; } });
+        if (s) { ncm.vinyl = s; ncm.vinylState = states; }
+      }
+    }
+    return !!ncm.vinyl;
+  }
 
   // --- NCM's store -------------------------------------------------------------------------
   let store = null;
   function getStore() {
     if (store) return store;
+    const s = ncm.app?.app?._store;
+    if (s?.getState && s.dispatch && s.subscribe) return (store = s);
     const start = document.querySelector('footer') || document.getElementById('root');
     const key = start && Object.keys(start).find((k) => k.startsWith('__reactInternalInstance$'));
     for (let f = key && start[key]; f; f = f.return) {
-      const s = f.memoizedProps?.store;
-      if (s?.getState && s.dispatch) return (store = s);
+      const fs = f.memoizedProps?.store;
+      if (fs?.getState && fs.dispatch) return (store = fs);
     }
     const root = document.getElementById('root')?._reactRootContainer?._internalRoot?.current;
     const queue = root ? [root] : [];
     for (let i = 0; i < queue.length && i < 5000; i++) {
       const f = queue[i];
-      const s = f.memoizedProps?.store;
-      if (s?.getState && s.dispatch) return (store = s);
+      const fs = f.memoizedProps?.store;
+      if (fs?.getState && fs.dispatch) return (store = fs);
       if (f.child) queue.push(f.child);
       if (f.sibling) queue.push(f.sibling);
     }
     return null;
   }
-  const playing = () => getStore()?.getState().playing || {};
+  const state = () => getStore()?.getState() || {};
+  const playing = () => state().playing || {};
   const dispatch = (action) => getStore()?.dispatch(action);
 
   // --- reading state -------------------------------------------------------------------------
@@ -63,7 +134,7 @@ function installLyricsBridge() {
   const first = (...vals) => vals.find((v) => v != null && v !== '' && !(Array.isArray(v) && !v.length));
 
   function trackId(p = playing()) {
-    return str(first(p.resourceTrackId, p.originFromTrack?.lrcid, p.originFromTrack?.track?.tid, p.curTrack?.id, p.id, p.data?.id));
+    return str(first(p.resourceTrackId, p.onlineResourceId, p.curTrack?.id, p.curPlaying?.trackId));
   }
 
   function aliasOf(t) {
@@ -74,89 +145,92 @@ function installLyricsBridge() {
     };
   }
 
-  function readTrack() {
-    const p = playing();
-    const t = p.curTrack || p.data || {};
-    const arts = first(p.resourceArtists, p.artists, t.artists, t.ar, p.data?.artists) || [];
-    const al = first(t.album, t.al, p.data?.album) || {};
-    let dur = Number(first(p.resourceDuration, p.duration, p.dt, t.duration, t.dt, p.data?.duration) || 0);
-    if (dur > 1000) dur /= 1000;
+  // side.js shows Dolby Atmos for envSound 'dolby', and otherwise grades `quality` by number as
+  // RNPN does (<=192, <=320, <=999, else Hi-Res). NCM 3 has no envSound field; Dolby is 2999.
+  function qualityOf(p) {
+    const q = Number(p.resourcePlayingQuality);
+    const known = p.resourcePlayingQuality != null && p.resourcePlayingQuality !== '' && Number.isFinite(q) && q > 0;
     return {
-      id: trackId(p),
-      title: str(first(p.resourceName, p.name, t.name, p.data?.name)),
-      ...aliasOf(t),
-      artists: arts.map((a) => ({ id: str(a?.id), name: str(a?.name) })).filter((a) => a.name),
-      album: { id: str(al.id), name: str(al.name) },
-      duration: dur,
-      cover: str(first(p.resourceCoverUrl, t.album?.picUrl, t.al?.picUrl, t.coverUrl, p.data?.album?.picUrl)),
-      quality: str(p.resourcePlayingQuality),
-      envSound: str(p.resourcePlayingEnvSound),
+      quality: known ? String(q) : '',
+      qualityName: known ? QUALITY_NAME[q] || '' : '',
+      envSound: q === DOLBY ? 'dolby' : '',
       fileType: str(p.trackFileType),
-      threadId: str(p.resourceCommentThreadId),
-      local: p.trackFileType === 'local',
     };
   }
 
-  function readLiked() {
-    try {
-      const s = getStore().getState();
-      const id = s.playing?.onlineResourceId ?? s.playing?.resourceTrackId;
-      const map = s['async:hostResource']?.likeTracksMap;
-      if (map && id != null) return !!map[id];
-    } catch { /* fall through */ }
-    return false;
+  function readTrack() {
+    const p = playing();
+    const t = p.curTrack || {};
+    const arts = first(p.resourceArtists, t.artists, t.ar) || [];
+    const al = first(t.album, t.al) || {};
+    // resourceDuration is in seconds, curTrack's in ms
+    const dur = Number(p.resourceDuration) > 0 ? Number(p.resourceDuration) : Number(first(t.duration, t.dt) || 0) / 1000;
+    const id = trackId(p);
+    const q = qualityOf(p);
+    const local = q.fileType === 'local';
+    return {
+      id,
+      playId: str(p.playId),
+      title: str(first(p.resourceName, t.name)),
+      ...aliasOf(t),
+      artists: arts.map((a) => ({ id: str(a?.id), name: str(a?.name) })).filter((a) => a.name),
+      album: { id: str(al.id), name: str(al.name) },
+      duration: Number.isFinite(dur) ? dur : 0,
+      cover: str(first(p.resourceCoverUrl, al.picUrl, t.coverUrl)),
+      ...q,
+      threadId: str(p.resourceCommentThreadId),
+      local,
+    };
   }
 
-  function readPlayerSetting() {
-    try { return JSON.parse(localStorage.getItem('NM_SETTING_PLAYER') || '{}'); } catch { return {}; }
+  function readLiked(s = state()) {
+    const p = s.playing || {};
+    const id = first(p.onlineResourceId, p.resourceTrackId);
+    const map = s['async:hostResource']?.likeTracksMap;
+    return !!(map && id != null && map[id]);
   }
 
-  function footerButtons() {
-    return [...document.querySelectorAll('footer button')].filter((b) => b.offsetParent);
-  }
-  const labelOf = (el) => [el.getAttribute('aria-label'), el.title, el.getAttribute('data-testid'), el.className].map(str).join(' ').toLowerCase();
-
-  function modeButton() {
-    return document.querySelector('footer > * > * > .middle > *:nth-child(1) > button:nth-child(1)')
-      || footerButtons().find((b) => /mode|循环|随机|顺序|单曲|心动|shuffle|repeat|loop|order/.test(labelOf(b)));
+  function readMode(p = playing()) {
+    const m = p.playingMode === FM ? p.lastPlayingMode : p.playingMode;
+    return MODE_OF[m] || 'repeat';
   }
 
-  function readMode() {
-    const b = modeButton();
-    const l = b ? labelOf(b) : '';
-    if (/心动|heart|ai/.test(l)) return 'ai';
-    if (/单曲|one|single/.test(l)) return 'one';
-    if (/随机|shuffle|random/.test(l)) return 'random';
-    if (/顺序|order|sequence/.test(l)) return 'order';
-    if (/循环|repeat|loop/.test(l)) return 'repeat';
-    const m = str(readPlayerSetting().mode).toLowerCase();
-    if (/playonce|once|sequence/.test(m)) return 'order';
-    if (/playcycle|singleloop|single|repeatone/.test(m)) return 'one';
-    if (/random|shuffle/.test(m)) return 'random';
-    if (/order|loop|repeat/.test(m)) return 'repeat';
-    return 'repeat';
+  function readVolume(p = playing()) {
+    const v = Number(p.playingVolume);
+    return Number.isFinite(v) ? Math.min(1, Math.max(0, v > 1 ? v / 100 : v)) : 0.5;
   }
 
-  let volume = null;
-  function readVolume() {
-    if (volume != null) return volume;
-    const s = readPlayerSetting();
-    const v = Number(first(s.volume, s.vol, s.volumeValue, playing().playingVolume));
-    return Number.isFinite(v) ? (v > 1 ? v / 100 : v) : 0.5;
+  const readRoaming = (p = playing()) => p.playingMode === FM;
+
+  // NCM's own dislike icon (only rendered while roaming), without its clip path (an id that would
+  // be duplicated) and fixed size. Kept once found: the button is gone outside roaming.
+  let dislikeIcon = '';
+  function readDislikeIcon() {
+    if (dislikeIcon) return dislikeIcon;
+    const svg = document.querySelector(`${DISLIKE_BTN} svg`)?.cloneNode(true);
+    if (!svg) return '';
+    svg.querySelectorAll('defs').forEach((d) => d.remove());
+    svg.querySelectorAll('[clip-path]').forEach((g) => g.removeAttribute('clip-path'));
+    svg.removeAttribute('width');
+    svg.removeAttribute('height');
+    return (dislikeIcon = svg.outerHTML || '');
   }
 
-  const readRoaming = () => !!document.querySelector('footer [data-testid="tid_fmdislike_btn"]');
-
-  let playState = null; // from native events; the store's playingState is stale after a reload
+  // Native play-state events are right; the store's playingState (2 = playing) can be stale after
+  // a reload until the first play/pause, so advancing progress counts as playing too.
+  let playState = null;
   const readPlaying = () => (playState != null ? playState : playing().playingState === 2);
 
   function frame() {
     return { x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight };
   }
+  function fullscreen() {
+    return !!state().app?.isFullScreen || (window.outerWidth >= screen.width && window.outerHeight >= screen.height);
+  }
 
   function snapshot() {
     return { t: 'snapshot', track: readTrack(), playing: readPlaying(), liked: readLiked(), mode: readMode(),
-      volume: readVolume(), roaming: readRoaming(), frame: frame() };
+      volume: readVolume(), roaming: readRoaming(), dislikeIcon: readDislikeIcon(), frame: frame(), fullscreen: fullscreen() };
   }
 
   // --- active: the window shows ----------------------------------------------------------------
@@ -168,101 +242,123 @@ function installLyricsBridge() {
     last[key] = j;
     post(msg);
   }
+  const remember = (key, value) => { last[key] = JSON.stringify(value); };
 
-  let pollTimer = 0;
+  let slices = {};
+  const slicesOf = (s) => ({ p: s.playing, host: s['async:hostResource'], app: s.app });
+  let iconTries = 0;
   function checkAll() {
     if (!active) return;
+    const s = state();
+    const p = s.playing || {};
+    const needIcon = readRoaming(p) && !dislikeIcon;
+    // only when a slice that matters changed (the store notifies for every dispatch)
+    if (!needIcon && slices.p === s.playing && slices.host === s['async:hostResource'] && slices.app === s.app) return;
+    slices = slicesOf(s);
     const tr = readTrack();
     sendIfChanged('track', tr, { t: 'track', ...tr });
-    sendIfChanged('liked', readLiked(), { t: 'liked', v: readLiked() });
-    sendIfChanged('mode', readMode(), { t: 'mode', v: readMode() });
-    sendIfChanged('roaming', readRoaming(), { t: 'roaming', v: readRoaming() });
+    sendIfChanged('liked', readLiked(s), { t: 'liked', v: readLiked(s) });
+    sendIfChanged('mode', readMode(p), { t: 'mode', v: readMode(p) });
+    sendIfChanged('volume', readVolume(p), { t: 'volume', v: readVolume(p) });
+    if (playState == null) sendIfChanged('playing', readPlaying(), { t: 'state', playing: readPlaying() });
+    const roaming = readRoaming(p);
+    const icon = roaming ? readDislikeIcon() : '';
+    sendIfChanged('roaming', [roaming, !!icon], icon ? { t: 'roaming', v: roaming, icon } : { t: 'roaming', v: roaming });
+    // NCM renders its dislike button a moment after the mode changes
+    if (roaming && !icon && iconTries++ < 5) setTimeout(queueCheck, 400);
   }
   let checkQueued = false;
   function queueCheck() {
     if (!active || checkQueued) return;
     checkQueued = true;
-    setTimeout(() => { checkQueued = false; checkAll(); }, 30);
+    setTimeout(() => { checkQueued = false; checkAll(); }, CHECK_DELAY_MS);
   }
 
   function setActive(v) {
     active = !!v;
     document.body?.classList.toggle(OPEN_CLASS, active);
-    clearInterval(pollTimer);
+    if (!active) return;
+    const s = snapshot();
+    post(s);
     last = {};
-    if (active) {
-      post(snapshot());
-      const s = snapshot();
-      last = { track: JSON.stringify(s.track), liked: JSON.stringify(s.liked), mode: JSON.stringify(s.mode), roaming: JSON.stringify(s.roaming) };
-      // the mode and like buttons change without a store change now and then; a slow poll is enough
-      pollTimer = setInterval(checkAll, 1500);
-      sendProgress(true);
-    }
+    slices = slicesOf(state());
+    iconTries = 0;
+    remember('track', s.track);
+    remember('liked', s.liked);
+    remember('mode', s.mode);
+    remember('volume', s.volume);
+    remember('playing', s.playing);
+    remember('roaming', [s.roaming, !!(s.roaming && s.dislikeIcon)]);
+    sendProgress(true);
   }
 
   // --- native events ------------------------------------------------------------------------
+  // Progress comes from the channel shim's tap at NCM's full rate (30-50 Hz while playing) and is
+  // decimated here, in the event itself: timers are throttled while NCM's page is hidden.
   let prog = null; // { id, pos, at }
+  let rawProg = null; // the newest event while the window is closed, parsed only when needed
   let progSentAt = -Infinity;
-  let progTimer = 0;
+  function latestProg() {
+    if (rawProg) {
+      const pos = parseFloat(rawProg.args[1]);
+      if (Number.isFinite(pos)) prog = { id: String(rawProg.args[0]), pos, at: rawProg.at };
+      rawProg = null;
+    }
+    return prog;
+  }
+
   function sendProgress(force) {
-    if (!active || !prog) return;
-    clearTimeout(progTimer);
-    progTimer = 0;
-    progSentAt = performance.now();
-    post({ t: 'progress', id: prog.id, pos: prog.pos + (playState ? (performance.now() - prog.at) / 1000 : 0), wall: Date.now(), force: !!force });
+    const pr = active && latestProg();
+    if (!pr) return;
+    const now = performance.now();
+    progSentAt = now;
+    post({ t: 'progress', id: pr.id, pos: pr.pos + (readPlaying() ? (now - pr.at) / 1000 : 0), wall: Date.now(), force: !!force });
   }
 
   function onProgress(args) {
     const now = performance.now();
-    const id = String(args[0]);
+    if (!active) { rawProg = { args, at: now }; return; }
     const pos = parseFloat(args[1]);
     if (!Number.isFinite(pos)) return;
-    const prev = prog;
+    const prev = latestProg();
+    const id = String(args[0]);
     prog = { id, pos, at: now };
-    if (!active) return;
+    if (playState == null && prev && prev.id === id && pos > prev.pos) setPlayState(true);
     const jump = !prev || prev.id !== id || pos < prev.pos - 0.25 || pos > prev.pos + (now - prev.at) / 1000 + 0.75;
-    if (jump || now - progSentAt >= PROGRESS_MS) { sendProgress(jump); return; }
-    if (!progTimer) progTimer = setTimeout(() => sendProgress(false), PROGRESS_MS - (now - progSentAt));
+    if (jump || now - progSentAt >= PROGRESS_MS) sendProgress(jump);
+  }
+
+  function setPlayState(v) {
+    playState = v;
+    const pr = latestProg();
+    if (pr) pr.at = performance.now();
+    if (active) { remember('playing', v); post({ t: 'state', playing: v }); }
   }
 
   function onPlayState(args) {
     const st = String(args[1] || '').split('|')[1];
-    if (st === 'pause' || st === 'stop') playState = false;
-    else if (st === 'resume' || st === 'play') playState = true;
-    else return;
-    if (prog) prog.at = performance.now();
-    if (active) post({ t: 'state', playing: playState });
-  }
-
-  function onVolume(args) {
-    for (let i = args.length - 1; i >= 0; i--) {
-      let v = args[i];
-      if (v && typeof v === 'object') v = first(v.volume, v.vol, v.value, v.currentVolume);
-      v = Number(v);
-      if (Number.isFinite(v) && v >= 0 && v <= 100) {
-        volume = v > 1 ? v / 100 : v;
-        if (active) post({ t: 'volume', v: volume });
-        return;
-      }
-    }
+    if (st === 'pause' || st === 'stop') setPlayState(false);
+    else if (st === 'resume' || st === 'play') setPlayState(true);
   }
 
   function tap(command, args) {
     if (command === PROGRESS) onProgress(args);
     else if (command === PLAY_STATE) onPlayState(args);
-    else if (command === VOLUME) onVolume(args);
     else if (command === LOAD) queueCheck();
   }
 
   // --- opening ------------------------------------------------------------------------------
   let opening = false;
-  let fallback = false;
+  let fallback = false; // no window to show: NCM's own page opens as it would without us
   function requestOpen() {
     if (opening) return;
     opening = true;
     setTimeout(() => { opening = false; }, 800);
-    post({ t: 'open', frame: frame(), fullscreen: window.outerWidth >= screen.width && window.outerHeight >= screen.height });
+    post({ t: 'open', frame: frame(), fullscreen: fullscreen() });
   }
+  const letThrough = () => fallback || hasClass(STOCK_CLASS) || hasClass(PANEL_CLASS);
+  // after a fallback every open is NCM's own page, so it stays visible
+  const endStock = () => { if (!fallback) document.body?.classList.remove(STOCK_CLASS); };
 
   function clickEl(el) {
     const r = el.getBoundingClientRect();
@@ -274,29 +370,63 @@ function installLyricsBridge() {
     el.dispatchEvent(new MouseEvent('click', o));
   }
 
-  // The play bar's cover: open the window instead of NCM's page (shift-click: NCM's page).
+  // The one choke point: NCM's vinyl-page subject. Every opener (the play bar's cover, menus, the
+  // tray, the desktop lyric, heart mode, FM cards, plugins) calls its next('opening').
+  let hooked = false;
+  function hookVinyl() {
+    const vs = ncm.vinyl;
+    if (!vs || hooked) return hooked;
+    const OPENING = ncm.vinylState.opening;
+    const CLOSED = ncm.vinylState.closed;
+    const orig = vs.next;
+    vs.next = function next(v) {
+      if (v === OPENING && !letThrough()) { requestOpen(); return undefined; }
+      if (v === CLOSED) endStock();
+      return orig.call(this, v);
+    };
+    hooked = true;
+    return true;
+  }
+  const vinylValue = () => { try { return ncm.vinyl?.getValue(); } catch { return null; } };
+
+  // The play bar's cover. With the subject hooked a plain click needs nothing here: NCM's own
+  // handler runs into the hook. Shift-click opens NCM's own page (百科 etc. in NCM's own look).
   document.addEventListener('click', (e) => {
     if (fallback) return;
-    const t = e.target instanceof Element && e.target.closest('footer .miniVinylWrapper');
+    const t = e.target instanceof Element && e.target.closest(COVER);
     if (!t) return;
-    if (e.shiftKey) { document.body.classList.add('bncm-stock-vinyl'); return; }
+    if (e.shiftKey) {
+      document.body.classList.add(STOCK_CLASS);
+      // NCM's cover handler is throttled; if it opened nothing, stop letting its page through
+      setTimeout(() => {
+        const v = hooked ? vinylValue() : getStore()?.getState()['page:vinylPage']?.pageState;
+        if (v === 'closed' || v == null) endStock();
+      }, STOCK_GRACE_MS);
+      return;
+    }
+    if (hooked) return;
     e.stopPropagation();
     e.preventDefault();
     requestOpen();
   }, true);
 
-  // Every other way in (menus, shortcuts, NCM's own code): NCM's page starts to open, hidden by
-  // STOCK_PAGE_CSS; close it again and open the window.
+  // Without the hook: NCM's page starts to open, hidden by STOCK_PAGE_CSS; close it again and
+  // open the window.
   let vinylWas = null;
   let collapsing = false;
+  let lastStore = null;
   function onStore() {
-    queueCheck();
-    const v = getStore()?.getState()['page:vinylPage']?.pageState;
+    if (active) queueCheck();
+    if (hooked) return;
+    const s = getStore()?.getState();
+    if (!s || s === lastStore) return;
+    lastStore = s;
+    const v = s['page:vinylPage']?.pageState;
     if (v === vinylWas) return;
     const was = vinylWas;
     vinylWas = v;
-    if (v === 'closed') document.body.classList.remove('bncm-stock-vinyl');
-    if (fallback || document.body.classList.contains('bncm-stock-vinyl')) return;
+    if (v === 'closed') endStock();
+    if (letThrough()) return;
     if ((v === 'opening' || v === 'opened') && was !== 'opening' && was !== 'opened') {
       requestOpen();
       collapseStock();
@@ -324,29 +454,107 @@ function installLyricsBridge() {
     if (adapter?.callAdapter) return adapter.callAdapter(cmd, () => {}, params);
     return window.channel?.call(cmd, () => {}, params);
   }
+  const winCall = (cmd, params) => window.channel?.call(cmd, () => {}, params);
 
   function seek(sec) {
     const id = trackId();
-    if (!id || !Number.isFinite(sec)) return;
-    nativeCall('audioplayer.seek', [id, `${id}|seek|${rand()}`, Math.max(0, sec)]);
-    if (prog) { prog = { id, pos: sec, at: performance.now() }; sendProgress(true); }
+    if (!id || !Number.isFinite(sec)) return false;
+    const to = Math.max(0, sec);
+    if (getStore()) dispatch({ type: 'playing/setPlayingPosition', payload: { duration: to } });
+    else nativeCall('audioplayer.seek', [id, `${id}|seek|${rand()}`, to]);
+    const pr = latestProg();
+    if (pr) { prog = { id: pr.id, pos: to, at: performance.now() }; sendProgress(true); }
+    return true;
   }
 
-  function navigate(hash) {
-    const h = String(hash || '');
-    if (!/^#?\/m\//.test(h)) return false;
-    const pathq = h.replace(/^#/, '');
-    // NCM's router (react-router's history) when it can be found, else the hash
+  function nextMode() {
+    const s = state();
+    const p = s.playing || {};
+    if (p.playingMode === FM) {
+      // NCM's button is disabled while roaming, except for the single/endless FM switch
+      if (s.abtest?.['PH-PC-FM-Single']?.expGroupName !== 't1') return false;
+      dispatch({ type: 'fmPlaying/switchPlayingMode', payload: {} });
+      return true;
+    }
+    const lt = s['async:listenTogether'];
+    const together = !!(lt?.roomInfo?.roomId && lt.status !== 'alone');
+    const heart = p.isCanHeartBeat ?? true;
+    const list = together ? CYCLE_TOGETHER : heart ? CYCLE_AI : CYCLE;
+    const i = Math.max(list.indexOf(p.playingMode), 0);
+    const mode = list[i === list.length - 1 ? 0 : i + 1];
+    dispatch({ type: 'playing/switchPlayingMode', payload: { playingMode: mode, triggerScene: 'miniBar', HeartBeatFlage: heart } });
+    return true;
+  }
+
+  // The FM track NCM's dislike button hands to its blacklist modal: `current` of the scene's FM
+  // state, picked as NCM's own selector does (app chunk, module 93 .a).
+  function currentFmTrack() {
+    const fm = state().fmPlaying;
+    if (!fm) return null;
+    const st = fm.currentScene === 'fm'
+      ? (fm.currentMode ? fm.privateFmByMode?.[fm.currentMode] : fm.privateFm)
+      : fm.zoneFm?.[fm.currentId];
+    return st?.current || st?.fmTracks?.[st.currentIndex] || null;
+  }
+
+  function dislike() {
+    const s = state();
+    if (!readRoaming(s.playing || {})) return false;
+    const resource = currentFmTrack();
+    if (resource && s.abtest?.['PH-PC-Blacklist']?.expGroupName === 't1') {
+      dispatch({ type: 'playing/openDislikeModal', payload: { resource, resourceType: 'track', scene: s.fmPlaying?.currentScene } });
+      return true;
+    }
+    // the other branches need the click event (a context menu at the pointer)
+    const b = document.querySelector(DISLIKE_BTN);
+    if (b) clickEl(b);
+    return !!b;
+  }
+
+  function openPlaylist() {
+    if (ncm.playlist) {
+      try { ncm.playlist.openPlaylist(); return true; } catch { /* the button below */ }
+    }
+    const b = document.querySelector(PLAYLIST_BTN);
+    if (b) clickEl(b);
+    return !!b;
+  }
+
+  function history() {
+    try { const h = ncm.app?.getHistory?.(); if (h?.push) return h; } catch { /* the fiber walk */ }
     const root = document.getElementById('root')?._reactRootContainer?._internalRoot?.current;
     const queue = root ? [root] : [];
     for (let i = 0; i < queue.length && i < 3000; i++) {
       const f = queue[i];
-      const hist = f.memoizedProps?.history;
-      if (hist?.push) { hist.push(pathq); return true; }
+      const h = f.memoizedProps?.history;
+      if (h?.push) return h;
       if (f.child) queue.push(f.child);
       if (f.sibling) queue.push(f.sibling);
     }
-    location.hash = pathq;
+    return null;
+  }
+
+  // RNPN's links are NCM 2 hashes (#/m/artist/?id=1); NCM 3 routes through its link action, which
+  // is what its own menus run. A path of NCM 3's own (#/album/1) is pushed as it is.
+  const LINK_TYPES = { artist: 'artist', album: 'album', playlist: 'playlist', personal: 'user', user: 'user' };
+  function navigate(hash) {
+    const h = String(hash || '').replace(/^#/, '');
+    const m = /^\/m\/(\w+)\/?\?(?:id|uid)=(\d+)/.exec(h);
+    if (m) {
+      if (LINK_TYPES[m[1]]) {
+        dispatch({ type: 'async:action/doAction', payload: { actionId: 'link', data: { resource: { id: m[2] }, resourceType: LINK_TYPES[m[1]] } } });
+        return true;
+      }
+      if (m[1] === 'song') return pushRoute(`/comment/R_SO_4_${m[2]}`);
+      return false;
+    }
+    if (/^\/[\w-]/.test(h) && !h.startsWith('/m/')) return pushRoute(h);
+    return false;
+  }
+  function pushRoute(path) {
+    const hist = history();
+    if (!hist) return false;
+    hist.push(path);
     return true;
   }
 
@@ -357,45 +565,49 @@ function installLyricsBridge() {
     try { return JSON.parse(text); } catch { return text; }
   }
 
+  // Hand the screen back to NCM: put its window where the lyrics window was and raise it.
+  // `cocoa` is the frame with a bottom-left origin, which winhelper.setWindowPosition uses. That
+  // call also sets NCM's minimum size to the size given (and may re-centre first), so it is made
+  // only when the frame differs, and NCM's own minimum is put back after it.
+  function showNcm(m) {
+    const f = m.cocoa;
+    const top = m.frame;
+    const same = top && [top.x - window.screenX, top.y - window.screenY, top.w - window.outerWidth, top.h - window.outerHeight]
+      .every((d) => Number.isFinite(d) && Math.abs(d) <= 1);
+    if (!same && f && [f.x, f.y, f.w, f.h].every(Number.isFinite)) {
+      winCall('winhelper.setWindowPosition', [{ x: Math.round(f.x), y: Math.round(f.y), width: Math.round(f.w), height: Math.round(f.h), topmost: false }]);
+      const min = ncm.minSize || NCM_MIN;
+      winCall('winhelper.setWindowSizeLimit', [{ x: min.w, y: min.h }, { x: 0, y: 0 }]);
+    }
+    winCall('winhelper.bringWindowToTop', []);
+    return true;
+  }
+
+  const reply = (m, ok, v) => post(ok ? { t: 'reply', rid: m.rid, ok: true, data: v } : { t: 'reply', rid: m.rid, ok: false, error: String(v?.message || v) });
+
   const commands = {
+    hello: () => { post({ t: 'hello' }); return true; },
     snapshot: () => { post(snapshot()); return true; },
     active: (m) => { setActive(m.v); return true; },
     toggle: () => { dispatch({ type: 'playing/switchResumeOrPause', payload: { triggerScene: 'miniBar' } }); return true; },
     prev: () => { dispatch({ type: 'playingList/jump2Track', payload: { flag: -1, type: 'call', triggerScene: 'miniBar' } }); return true; },
     next: () => { dispatch({ type: 'playingList/jump2Track', payload: { flag: 1, type: 'call', triggerScene: 'miniBar' } }); return true; },
-    seek: (m) => { seek(Number(m.sec)); return true; },
+    seek: (m) => seek(Number(m.sec)),
     volume: (m) => {
       const v = Math.min(1, Math.max(0, Number(m.v)));
       if (!Number.isFinite(v)) return false;
-      nativeCall('audioplayer.setVolume', ['', '', v]);
-      volume = v;
+      if (getStore()) dispatch({ type: 'playing/setVolume', payload: { volume: v } });
+      else nativeCall('audioplayer.setVolume', ['', '', v]);
+      remember('volume', v); // the store echoes it; the window has it already
       return true;
     },
-    like: () => {
-      dispatch({ type: 'async:hostResource/setLikeCurPlayingTrack', payload: {} });
-      for (const ms of [120, 400, 900]) setTimeout(checkAll, ms);
-      return true;
-    },
-    mode: () => {
-      const b = modeButton();
-      if (b) clickEl(b);
-      for (const ms of [80, 300]) setTimeout(checkAll, ms);
-      return !!b;
-    },
-    playlist: () => {
-      const b = footerButtons().find((x) => /playlist|播放列表|列表/.test(labelOf(x)));
-      if (b) clickEl(b);
-      return !!b;
-    },
-    dislike: () => {
-      const b = document.querySelector('footer [data-testid="tid_fmdislike_btn"]');
-      if (b) clickEl(b);
-      return !!b;
-    },
+    like: () => { dispatch({ type: 'async:hostResource/setLikeCurPlayingTrack', payload: { from: 'miniBar' } }); return true; },
+    mode: () => nextMode(),
+    playlist: () => openPlaylist(),
+    dislike: () => dislike(),
     nav: (m) => navigate(m.hash),
     fetch: async (m) => {
-      try { post({ t: 'reply', rid: m.rid, ok: true, data: await doFetch(String(m.url)) }); }
-      catch (e) { post({ t: 'reply', rid: m.rid, ok: false, error: String(e?.message || e) }); }
+      try { reply(m, true, await doFetch(String(m.url))); } catch (e) { reply(m, false, e); }
       return true;
     },
     // The cover sampled to 32x32 the way RNPN samples it, by this page's Chromium (accent.js in the
@@ -412,12 +624,12 @@ function installLyricsBridge() {
           const d = g.getImageData(0, 0, 32, 32).data;
           let bin = '';
           for (let i = 0; i < d.length; i++) bin += String.fromCharCode(d[i]);
-          post({ t: 'reply', rid: m.rid, ok: true, data: btoa(bin) });
+          reply(m, true, btoa(bin));
         } catch (e) {
-          post({ t: 'reply', rid: m.rid, ok: false, error: String(e?.message || e) });
+          reply(m, false, e);
         }
       };
-      img.onerror = () => post({ t: 'reply', rid: m.rid, ok: false, error: 'cover did not load' });
+      img.onerror = () => reply(m, false, 'cover did not load');
       img.src = String(m.url);
       return true;
     },
@@ -427,51 +639,44 @@ function installLyricsBridge() {
         const k = localStorage.key(i);
         if (k?.startsWith('refined-now-playing-')) ls[k.slice('refined-now-playing-'.length)] = localStorage.getItem(k);
       }
-      post({ t: 'reply', rid: m.rid, ok: true, data: ls });
+      reply(m, true, ls);
       return true;
     },
-    ncmAction: (m) => {
-      const run = actions[m.action];
-      let data = null;
-      let ok = false;
-      try { data = run ? run(m) : null; ok = !!run; } catch (e) { data = String(e?.message || e); }
-      if (m.rid) post({ t: 'reply', rid: m.rid, ok, data });
-      return ok;
-    },
-    // Hand the screen back to NCM: put its window where the lyrics window was and raise it.
-    // `cocoa` is the frame with a bottom-left origin, which winhelper.setWindowPosition uses.
-    showNcm: (m) => {
-      const f = m.cocoa;
-      if (f && [f.x, f.y, f.w, f.h].every(Number.isFinite)) {
-        window.channel?.call('winhelper.setWindowPosition', () => {}, [{ x: Math.round(f.x), y: Math.round(f.y), width: Math.round(f.w), height: Math.round(f.h), topmost: false }]);
+    ncmAction: async (m) => {
+      const run = Object.prototype.hasOwnProperty.call(actions, m.action) && actions[m.action];
+      try {
+        if (typeof run !== 'function') throw new Error(`no action ${m.action}`);
+        const data = await run(m, helpers);
+        if (m.rid) reply(m, true, data ?? null);
+        return true;
+      } catch (e) {
+        if (m.rid) reply(m, false, e);
+        return false;
       }
-      window.channel?.call('winhelper.bringWindowToTop', () => {}, []);
-      return true;
     },
-    minimizeNcm: () => { window.channel?.call('winhelper.showWindow', () => {}, ['minimize']); return true; },
+    showNcm,
+    minimizeNcm: () => { winCall('winhelper.showWindow', ['minimize']); return true; },
     fallback: () => {
       fallback = true;
-      document.body.classList.add('bncm-stock-vinyl');
+      document.body.classList.add(STOCK_CLASS);
       dispatch({ type: 'playing/openVinylPage' });
       return true;
     },
   };
 
-  // Panel and menu actions handed to NCM (filled in by the panels; each returns plain data).
-  const actions = {
-    playTrack: (m) => {
-      dispatch({ type: 'playing/playTrack', payload: { id: String(m.id), triggerScene: 'miniBar' } });
-      return true;
-    },
-  };
+  // Panel and menu actions handed to NCM: lyrics-actions-*.js preludes register them in
+  // window.__bncmLyricsActions as name -> (msg, helpers) => plain data (or a promise of it).
+  const actions = (window.__bncmLyricsActions ||= {});
+  const helpers = { getStore, dispatch, post, clickEl, nativeCall, navigate, readTrack, trackId, require: webpackRequire };
 
   window.__bncmLyricsBridge = {
     cmd(m) {
-      const fn = m && commands[m.c];
+      const fn = m && Object.prototype.hasOwnProperty.call(commands, m.c) && commands[m.c];
       if (!fn) return false;
       try { return fn(m); } catch (e) { console.error('[BetterNCM] lyrics bridge command failed', m.c, e); return false; }
     },
     actions,
+    get hooked() { return hooked; },
   };
 
   // --- start ----------------------------------------------------------------------------------
@@ -480,13 +685,28 @@ function installLyricsBridge() {
   style.textContent = STOCK_PAGE_CSS;
   (document.head || document.documentElement).appendChild(style);
 
-  if (typeof window.__bncmChannelTap === 'function') window.__bncmChannelTap(tap);
-  else console.warn('[BetterNCM] lyrics bridge: channel shim taps unavailable');
+  if (typeof window.__bncmChannelTap === 'function') {
+    window.__bncmChannelTap(tap);
+  } else if (window.channel?.registerCall) {
+    // the shim's throttled plugin listeners (10 Hz) still do for 4 Hz
+    window.channel.registerCall(PROGRESS, (...a) => onProgress(a));
+    window.channel.registerCall(PLAY_STATE, (...a) => onPlayState(a));
+  } else {
+    console.warn('[BetterNCM] lyrics bridge: no channel to listen on');
+  }
 
+  let bootTries = 0;
+  let scans = 0; // a scan walks every loaded module; stop trying when the subject is not there
   const boot = setInterval(() => {
+    bootTries++;
+    try {
+      if (!hooked && scans < 40 && webpackRequire()?.c) { scans++; if (scanModules()) hookVinyl(); }
+    } catch (e) { console.warn('[BetterNCM] lyrics bridge: module scan failed', e); }
     const s = getStore();
     if (!s) return;
+    if (!hooked && bootTries < 20) return; // the modules come with the store; give them a moment
     clearInterval(boot);
+    if (!hooked) console.warn('[BetterNCM] lyrics bridge: NCM\'s vinyl page subject not found, watching the store');
     vinylWas = s.getState()['page:vinylPage']?.pageState ?? null;
     s.subscribe(onStore);
     post({ t: 'hello' });

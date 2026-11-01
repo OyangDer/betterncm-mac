@@ -4,11 +4,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { getDataPath, PROJECT_ROOT, readConfigKey } from './config.mjs';
+import { getDataPath, MAC_VERSION, PROJECT_ROOT, readConfigKey } from './config.mjs';
 import { log } from './log.mjs';
 
 export const BINDING = '__bncmLyricsPost';
 const HIDE_AFTER_NCM_MS = 120; // let NCM's window come up before ours goes, so nothing flashes
+// Start the host, hidden, this long after NCM's page is ready, so the first open is instant.
+const PREWARM_MS = 4000;
+const NO_BRIDGE = 'no-bridge';
+// Asks a page's bridge to say hello again: its first hello can come before the binding is there
+// (an injector attaching to a running NCM, or re-registering after a config change).
+const HELLO = `window.__bncmLyricsBridge ? window.__bncmLyricsBridge.cmd({ c: 'hello' }) : '${NO_BRIDGE}'`;
 
 export function lyricsWindowEnabled() {
   return readConfigKey('mac.lyricsWindow') === 'true';
@@ -26,21 +32,29 @@ export function hostPaths(root = PROJECT_ROOT) {
 /**
  * getCdp: () => the browser connection (send(method, params, sessionId)).
  * spawnHost: injectable for tests; defaults to child_process.spawn of the host binary.
+ * paths: injectable for tests; defaults to hostPaths(root).
  */
-export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = null } = {}) {
+export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = null, paths = null, prewarmMs = PREWARM_MS } = {}) {
   let bridgeSid = null; // the session whose page runs the bridge (NCM's main window)
   let host = null;
+  let prewarm = null;
+  let disposed = false;
   let open = false;
   const evals = new Map();
   let evalSeq = 0;
 
+  /**
+   * The command's return value, or NO_BRIDGE when it could not run in NCM's page. A command's
+   * promise is not awaited: requests answer through the binding themselves, and awaiting a slow
+   * fetch or a dialog the user is filling in would time out here and fail the request early.
+   */
   function evalInBridge(cmd) {
     const cdp = getCdp();
-    if (!cdp || cdp.closed || !bridgeSid) return Promise.resolve(null);
-    const expression = `window.__bncmLyricsBridge ? window.__bncmLyricsBridge.cmd(${JSON.stringify(cmd)}) : 'no-bridge'`;
-    return cdp.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, bridgeSid, { timeout: 5000 })
-      .then((r) => r?.result?.value ?? null)
-      .catch((e) => { log('lyrics: bridge command failed:', cmd.c, e.message); return null; });
+    if (!cdp || cdp.closed || !bridgeSid) return Promise.resolve(NO_BRIDGE);
+    const expression = `window.__bncmLyricsBridge ? window.__bncmLyricsBridge.cmd(${JSON.stringify(cmd)}) : '${NO_BRIDGE}'`;
+    return cdp.send('Runtime.evaluate', { expression, awaitPromise: false, returnByValue: true }, bridgeSid, { timeout: 5000 })
+      .then((r) => (r?.exceptionDetails ? NO_BRIDGE : r?.result?.value ?? null))
+      .catch((e) => { log('lyrics: bridge command failed:', cmd.c, e.message); return NO_BRIDGE; });
   }
 
   function hostCall(fields) {
@@ -53,6 +67,10 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
     });
   }
 
+  function rejectPending(why) {
+    for (const [id, w] of evals) { clearTimeout(w.timer); w.reject(new Error(why)); evals.delete(id); }
+  }
+
   function toHost(obj) {
     if (!host?.stdin?.writable) return;
     try { host.stdin.write(JSON.stringify(obj) + '\n'); } catch (e) { log('lyrics: write to host failed:', e.message); }
@@ -60,7 +78,7 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
 
   function startHost() {
     if (host) return host;
-    const p = hostPaths(root);
+    const p = paths || hostPaths(root);
     if (!spawnHost && !fs.existsSync(p.bin)) {
       log('lyrics: host binary missing at', p.bin);
       return null;
@@ -100,12 +118,19 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
       let i;
       while ((i = ebuf.indexOf('\n')) >= 0) { log(ebuf.slice(0, i)); ebuf = ebuf.slice(i + 1); }
     });
-    child.on('error', (e) => { log('lyrics: host error:', e.message); });
-    child.on('exit', (code, sig) => {
-      log(`lyrics: host exited (${sig ?? code})`);
-      if (host === child) host = null;
+    // a failed spawn reports 'error' and maybe no 'exit'
+    let gone = false;
+    const onGone = (why) => {
+      if (gone) return;
+      gone = true;
+      log(`lyrics: host exited (${why})`);
+      if (host !== child) return;
+      host = null;
+      rejectPending('the lyrics window exited');
       if (open) { open = false; evalInBridge({ c: 'active', v: false }); }
-    });
+    };
+    child.on('error', (e) => { log('lyrics: host error:', e.message); if (child.pid == null) onGone(e.message); });
+    child.on('exit', (code, sig) => onGone(sig ?? code));
     return child;
   }
 
@@ -114,7 +139,7 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
       const m = msg.msg;
       if (m && typeof m.c === 'string') {
         const r = await evalInBridge(m);
-        if (r === 'no-bridge' && m.rid) toHost({ to: 'web', msg: { t: 'reply', rid: m.rid, ok: false, error: 'NCM page not ready' } });
+        if (r === NO_BRIDGE && m.rid) toHost({ to: 'web', msg: { t: 'reply', rid: m.rid, ok: false, error: 'NCM page not ready' } });
       }
       return;
     }
@@ -122,8 +147,9 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
     if (msg.op === 'closing') {
       open = false;
       await evalInBridge({ c: 'showNcm', frame: msg.frame, cocoa: msg.cocoa });
-      setTimeout(() => toHost({ to: 'host', op: 'hide' }), HIDE_AFTER_NCM_MS);
-      evalInBridge({ c: 'active', v: false });
+      // opened again meanwhile: the window stays
+      setTimeout(() => { if (!open) toHost({ to: 'host', op: 'hide' }); }, HIDE_AFTER_NCM_MS);
+      if (!open) evalInBridge({ c: 'active', v: false });
     } else if (msg.op === 'minimizing') {
       open = false;
       evalInBridge({ c: 'minimizeNcm' });
@@ -138,9 +164,19 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
 
   async function onBridge(msg, sid) {
     if (msg.t === 'hello') {
+      const fresh = sid !== bridgeSid;
       bridgeSid = sid;
-      log('lyrics: bridge ready');
-      if (host) toHost({ to: 'web', msg });
+      if (fresh) log('lyrics: bridge ready');
+      if (!host) {
+        if (prewarmMs != null && !prewarm && !disposed) {
+          prewarm = setTimeout(() => { prewarm = null; if (!disposed) startHost(); }, prewarmMs);
+          prewarm.unref?.();
+        }
+        return;
+      }
+      toHost({ to: 'web', msg });
+      // NCM's page reloaded under the open window: its new bridge starts inactive
+      if (open) evalInBridge({ c: 'active', v: true });
       return;
     }
     if (sid !== bridgeSid) bridgeSid = sid;
@@ -151,7 +187,7 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
         return;
       }
       open = true;
-      toHost({ to: 'web', msg });
+      toHost({ to: 'web', msg: { ...msg, version: MAC_VERSION } });
       toHost({ to: 'host', op: 'show', frame: msg.frame, fullscreen: !!msg.fullscreen });
       evalInBridge({ c: 'active', v: true });
       return;
@@ -164,6 +200,10 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
     async attachSession(sessionId) {
       const cdp = getCdp();
       await cdp.send('Runtime.addBinding', { name: BINDING }, sessionId, { timeout: 5000 });
+      // Not awaited: a new target waits for the debugger until its setup is done. A page that
+      // has no bridge yet says hello itself once it boots.
+      cdp.send('Runtime.evaluate', { expression: HELLO, returnByValue: true }, sessionId, { timeout: 5000 })
+        .catch(() => { /* not a page, or it went away */ });
     },
     onBindingCalled(p, sid) {
       if (p?.name !== BINDING) return;
@@ -176,6 +216,10 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
       if (sid === bridgeSid) bridgeSid = null;
     },
     dispose() {
+      disposed = true;
+      clearTimeout(prewarm);
+      open = false;
+      rejectPending('the lyrics window was closed');
       if (host) {
         try { host.stdin.end(); } catch { /* gone */ }
         const h = host;
