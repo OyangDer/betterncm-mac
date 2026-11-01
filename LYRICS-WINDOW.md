@@ -51,23 +51,35 @@ Every message is one JSON object.
 
 ### Page → bridge (`c`)
 
-`hello`, `snapshot`, `active{v}` (the window is showing, so send progress), `toggle`, `prev`, `next`,
-`seek{sec}`, `volume{v}`, `like`, `mode`, `playlist`, `dislike`, `nav{hash}` (navigate NCM, used
-with `close`), `fetch{rid,url}` (GET from NCM's page with its cookies; music.163.com and
-interface*.music.163.com only), `rnpSettings{rid}` (RNPN's localStorage, for a one-time
-migration), `ncmAction{rid,action,...}` (panel and menu actions handed to NCM),
-`showNcm{frame}` (move NCM's window to `frame` and bring it to the front), `minimizeNcm`,
-`accentPixels{rid,url}` (the cover scaled to 32×32 by NCM's Chromium, for the accent colour),
-`fallback` (the window cannot open: let NCM open its own page).
+`hello`, `snapshot`, `active{v}` (the window is showing, so send progress), `drawn{v}` (sent on
+`visibilitychange` while the window is shown: with `v` false the window is covered or the screen is
+locked, so progress waits; back to true, a forced progress catches the page up; `active` resets it
+to true), `toggle`, `prev`, `next`, `seek{sec}`, `volume{v}`, `like`, `mode`, `playlist`, `dislike`,
+`nav{hash}` (navigate NCM, used with `close`), `fetch{rid,url}` (GET from NCM's page with its
+cookies; music.163.com and interface*.music.163.com only), `rnpSettings{rid}` (RNPN's localStorage,
+for a one-time migration), `ncmAction{rid,action,...}` (panel and menu actions handed to NCM),
+`showNcm{frame,cocoa}` (move NCM's window to the frame and bring it to the front),
+`minimizeNcm{frame,cocoa}` (move NCM's window to the frame without raising it, then minimize it),
+`accentPixels{rid,url}` (the cover scaled to 32×32 by NCM's Chromium, for the accent colour).
 
-`nav` takes NCM 3 paths (`/album/1`) or RNPN's old `#/m/…` hashes, which go through NCM's own link
-action.
+From the injector only: `fallback` (the window cannot open: let NCM open its own page) and `detach`
+(the injector is shutting down: inactive, and NCM's own page opens again from then on, nothing is
+opened now). An `open` that gets neither `active{v:true}` nor `fallback` within 1.5 s means the
+injector is gone: the bridge detaches and NCM's own page opens for that click.
+
+`nav` takes only RNPN's old NCM 2 hashes (`#/m/artist/?id=1`; `album`, `playlist`,
+`personal/?uid=`, `song`), which go through NCM's own link action (`song` opens its comments).
+Actions with their own allow-list (`commentLink`) push NCM 3 paths with the `pushRoute` helper.
+
+The injector takes bridge messages only from the default world of the top frame of an
+`orpheus://orpheus/` page, and from the session whose bridge last said `hello`; it passes on only
+the `t` values above, never a `host.` one.
 
 ### NCM actions (`ncmAction`)
 
 Panels and the ··· menu need more of NCM than the bridge itself offers. Each `src/prelude/lyrics-actions-*.js`
 adds handlers to `window.__bncmLyricsActions`; a handler gets the message and the bridge's helpers
-(`getStore`, `dispatch`, `post`, `clickEl`, `nativeCall`, `navigate`, `readTrack`, `trackId`, `require`)
+(`getStore`, `dispatch`, `post`, `clickEl`, `nativeCall`, `navigate`, `pushRoute`, `readTrack`, `trackId`, `require`)
 and its return value is the reply.
 
 | File | Actions |
@@ -89,7 +101,8 @@ Page to host:
 
 Host to page (`t` starting with `host.`):
 - `host.settings{data}`
-- `host.cover{url, cover, bg}`: asset URLs under `bncm://app/cache/`.
+- `host.cover{url, cover, bg}`: asset URLs under `bncm://app/cache/`. `host.cover{url, failed:true}`
+  when the cover could not be downloaded. Either only for the latest `cover` request.
 - `host.window{w, h, fullscreen, visible}`
 
 ### Injector ↔ host
@@ -97,16 +110,22 @@ Host to page (`t` starting with `host.`):
 Host stdin:
 - `{to:"web", msg}`
 - `{to:"host", op:"show", frame, fullscreen}`
-- `{to:"host", op:"hide"}`
+- `{to:"host", op:"hide"}`: a window in full screen leaves it first, so no empty Space is left.
 
 Host stdout:
 - `{from:"web", msg}`: the injector sends `msg` to the bridge when it has `c`.
-- `{from:"host", op:"closing", frame}`: the injector runs `showNcm` and then sends `hide`.
-- `{from:"host", op:"minimizing"}`
+- `{from:"host", op:"closing", frame, cocoa}`: the injector runs `showNcm` and then sends `hide`.
+- `{from:"host", op:"minimizing", frame, cocoa}`: the injector runs `minimizeNcm` with the frame.
 - `{from:"host", op:"log", msg}`
 
 `frame` is `{x, y, w, h}` in points with a top-left origin on the primary screen, which is what NCM's
-`window.screenX`/`screenY`/`outerWidth`/`outerHeight` and `winhelper.setWindowPosition` use.
+`window.screenX`/`screenY`/`outerWidth`/`outerHeight` use; `cocoa` is the same frame with a
+bottom-left origin, which `winhelper.setWindowPosition` takes.
+
+When NCM's connection closes (NCM quit, or restarts itself) the injector sends the page
+`{t:"state", playing:false}` and `hide`, then ends the host (a full-screen window's Space goes with
+it); the next `hello` pre-warms a new one. When the injector shuts down it first sends the bridge
+`detach` (300 ms at most), and turning `mac.lyricsWindow` off removes the binding from every page.
 
 ## Window behaviour
 
@@ -119,11 +138,17 @@ Host stdout:
   first open does not wait for WebKit.
 - **Collapsing.** The chevron, Esc, ⌘W and the red button all collapse. NCM's window is moved to the
   lyric window's frame and brought to the front, then the lyric window hides.
-- **The yellow button** collapses and minimizes NCM.
+- **The yellow button** (and a double-click on the top strip when the system's title-bar double-click
+  is set to Minimize) collapses and minimizes NCM: NCM is moved to the lyric window's frame, without
+  being raised, and minimized. Full screen disables it, as for any window.
 - **NCM activated from the Dock or ⌘Tab while the lyric window is open.** The lyric window is
   ordered back above NCM.
 - **Background.** The blurred background is rendered by the host once per cover, size and scheme,
   at a quarter size; blur 90 px makes the downscale invisible.
+- **Only its own page.** The web view navigates only to `bncm://app/` (main frame and frames); a
+  dropped link or file is refused, and a clicked web link opens in the default browser. The host
+  takes script messages only from the main frame with origin `bncm://app`. If the page is ever lost
+  (its process dies, or something else got committed) the host loads `bncm://app/index.html` again.
 - **Power.** The page animates only `transform` and `opacity`, and JS runs once per lyric line, not
   per frame. A hidden window draws nothing.
 

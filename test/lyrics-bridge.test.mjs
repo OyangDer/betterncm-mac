@@ -316,10 +316,14 @@ test('without NCM\'s modules: the cover click is caught, and an opening page is 
   assert.equal(e.stopped, true);
   assert.equal(e.prevented, true);
   assert.equal(p.ofType('open').length, 1);
+  p.cmd({ c: 'active', v: true }); // the relay's answer
+  p.cmd({ c: 'active', v: false });
 
   p.advance(1000);
   p.setState({ 'page:vinylPage': { pageState: 'opening' } });
   assert.equal(p.ofType('open').length, 2);
+  p.cmd({ c: 'active', v: true });
+  p.cmd({ c: 'active', v: false });
   p.setState({ 'page:vinylPage': { pageState: 'opened' } });
   p.advance(100);
   assert.deepEqual(p.collapseBtn.events, ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
@@ -515,10 +519,11 @@ test('commands dispatch NCM\'s own effects', () => {
   assert.equal(run({ c: 'nav', hash: '#/m/personal/?uid=56' })[1][0].payload.data.resourceType, 'user');
   assert.equal(p.cmd({ c: 'nav', hash: '#/m/song/?id=78' }), true);
   assert.deepEqual(p.history.pushed, ['/comment/R_SO_4_78']);
-  assert.equal(p.cmd({ c: 'nav', hash: '#/album/90' }), true);
-  assert.equal(p.history.pushed.at(-1), '/album/90');
-  assert.equal(p.cmd({ c: 'nav', hash: 'https://evil.example/' }), false);
-  assert.equal(p.cmd({ c: 'nav', hash: '#//evil.example/' }), false);
+  // nothing else: no NCM 3 path, however harmless it looks
+  for (const hash of ['#/album/90', '/comment/R_SO_4_1', '#/m/song/?id=78&x=/y', '#/m/song/?id=78/../../x', 'https://evil.example/', '#//evil.example/', '']) {
+    assert.equal(p.cmd({ c: 'nav', hash }), false, hash);
+  }
+  assert.deepEqual(p.history.pushed, ['/comment/R_SO_4_78']);
 
   // unknown commands and prototype names
   assert.equal(p.cmd({ c: 'toString' }), false);
@@ -540,7 +545,21 @@ test('showNcm moves NCM only when the frame differs, and puts its minimum size b
   ]);
   p.nativeCalls.length = 0;
   p.cmd({ c: 'minimizeNcm' });
-  assert.deepEqual(p.nativeCalls, [['winhelper.showWindow', ['minimize']]]);
+  assert.deepEqual(p.nativeCalls, [['winhelper.showWindow', ['minimize']]], 'no frame: minimized where it is');
+});
+
+test('minimizeNcm moves NCM to the window\'s frame first, without raising it', () => {
+  const p = load();
+  p.boot();
+  p.cmd({ c: 'minimizeNcm', frame: { x: 100, y: 76, w: 1200, h: 800 }, cocoa: { x: 100, y: 80, w: 1200, h: 800 } });
+  assert.deepEqual(p.nativeCalls, [
+    ['winhelper.setWindowPosition', [{ x: 100, y: 80, width: 1200, height: 800, topmost: false }]],
+    ['winhelper.setWindowSizeLimit', [{ x: 1056, y: 752 }, { x: 0, y: 0 }]],
+    ['winhelper.showWindow', ['minimize']],
+  ]);
+  p.nativeCalls.length = 0;
+  p.cmd({ c: 'minimizeNcm', frame: { x: 0, y: 76, w: 1470, h: 752 }, cocoa: { x: 0, y: 128, w: 1470, h: 752 } });
+  assert.deepEqual(p.nativeCalls, [['winhelper.showWindow', ['minimize']]], 'already there');
 });
 
 test('fetch goes to NCM\'s API hosts only', async () => {
@@ -569,7 +588,7 @@ test('ncmAction runs registered actions with the helpers, rnpSettings reads RNPN
   const p = load();
   p.boot();
   p.posts.length = 0;
-  p.ctx.__bncmLyricsActions.echo = async (m, h) => ({ got: m.x, id: h.trackId(), hasReq: typeof h.require === 'function' });
+  p.ctx.__bncmLyricsActions.echo = async (m, h) => ({ got: m.x, id: h.trackId(), hasReq: typeof h.require === 'function', push: h.pushRoute('/hotComments/1') });
   p.ctx.__bncmLyricsActions.fail = () => { throw new Error('nope'); };
   assert.equal(await p.cmd({ c: 'ncmAction', rid: 1, action: 'echo', x: 3 }), true);
   assert.equal(await p.cmd({ c: 'ncmAction', rid: 2, action: 'fail' }), false);
@@ -578,8 +597,9 @@ test('ncmAction runs registered actions with the helpers, rnpSettings reads RNPN
   assert.equal(await p.cmd({ c: 'ncmAction', action: 'constructor' }), false);
   assert.equal(await p.cmd({ c: 'ncmAction', action: 'toString' }), false);
   p.cmd({ c: 'rnpSettings', rid: 4 });
+  assert.deepEqual(p.history.pushed, ['/hotComments/1'], 'actions with their own list push NCM 3 paths');
   assert.deepEqual(p.posts, [
-    { t: 'reply', rid: 1, ok: true, data: { got: 3, id: '1810227452', hasReq: true } },
+    { t: 'reply', rid: 1, ok: true, data: { got: 3, id: '1810227452', hasReq: true, push: true } },
     { t: 'reply', rid: 2, ok: false, error: 'nope' },
     { t: 'reply', rid: 3, ok: false, error: 'no action missing' },
     { t: 'reply', rid: 4, ok: true, data: { a: '1' } },
@@ -612,4 +632,140 @@ test('the local and empty cases read sensibly', () => {
   assert.equal(s.mode, 'order');
   assert.equal(s.volume, 0.5);
   assert.equal(p.cmd({ c: 'seek', sec: 3 }), false, 'nothing loaded');
+});
+
+test('an open nobody answers opens NCM\'s own page: the injector is gone', () => {
+  const p = load();
+  p.boot();
+  p.cmd({ c: 'active', v: true }); // the window was open when the injector died
+  p.posts.length = 0;
+  p.vinyl.next('opening');
+  assert.equal(p.ofType('open').length, 1);
+  p.advance(1400);
+  assert.deepEqual(p.actions, []);
+  p.advance(200);
+  assert.deepEqual(p.actions, [{ type: 'playing/openVinylPage' }]);
+  assert.ok(p.bodyClasses.has('bncm-stock-vinyl'), 'visible');
+  assert.ok(!p.bodyClasses.has('bncm-lyrics-open'), 'the play bar is no longer slowed');
+  // from now on NCM's page opens directly, and nothing is posted
+  p.posts.length = 0;
+  p.vinyl.next('opening');
+  assert.deepEqual(p.vinyl.seen, ['opening']);
+  p.progress(3);
+  p.advance(5000);
+  assert.deepEqual(p.posts, []);
+});
+
+test('an open answered by the relay keeps the window', () => {
+  for (const answer of [{ c: 'active', v: true }, { c: 'fallback' }]) {
+    const p = load();
+    p.boot();
+    p.vinyl.next('opening');
+    p.advance(100);
+    p.cmd({ c: 'active', v: false }); // the relay's reset on hello is no answer
+    p.cmd(answer);
+    p.actions.length = 0;
+    p.advance(5000);
+    assert.deepEqual(p.actions, [], JSON.stringify(answer));
+  }
+});
+
+test('an answer that comes after the watchdog gave up makes later opens the window\'s again', () => {
+  const p = load();
+  p.boot();
+  p.vinyl.next('opening');
+  p.advance(1600); // a slow injector, not a gone one
+  assert.deepEqual(p.actions, [{ type: 'playing/openVinylPage' }]);
+  p.cmd({ c: 'active', v: true });
+  assert.ok(p.bodyClasses.has('bncm-lyrics-open'));
+  p.cmd({ c: 'active', v: false });
+  p.vinyl.next('opening'); // NCM's page, opened by the watchdog, is still let through
+  p.vinyl.next('closed');
+  assert.ok(!p.bodyClasses.has('bncm-stock-vinyl'), 'NCM\'s page closed: hidden again');
+  p.posts.length = 0;
+  p.advance(1000);
+  p.vinyl.next('opening');
+  assert.equal(p.ofType('open').length, 1);
+  // a detach is for good: no later active brings the window back
+  p.cmd({ c: 'active', v: true });
+  p.cmd({ c: 'detach' });
+  p.cmd({ c: 'active', v: true });
+  p.cmd({ c: 'active', v: false });
+  p.posts.length = 0;
+  p.advance(1000);
+  p.vinyl.next('opening');
+  assert.equal(p.ofType('open').length, 0);
+});
+
+test('an open before boot is done says hello first', () => {
+  const p = load({ webpack: false });
+  p.click(p.cover);
+  assert.deepEqual(p.posts.map((m) => m.t), ['hello', 'open']);
+  p.cmd({ c: 'active', v: true });
+  p.boot();
+  assert.equal(p.ofType('open').length, 1);
+});
+
+test('without NCM\'s modules, an unanswered open lets NCM\'s page open and stops collapsing it', () => {
+  const p = load({ webpack: false, state: {} });
+  p.boot();
+  p.setState({ 'page:vinylPage': { pageState: 'opening' } });
+  assert.equal(p.ofType('open').length, 1);
+  p.advance(1600);
+  assert.deepEqual(p.actions, [{ type: 'playing/openVinylPage' }]);
+  p.setState({ 'page:vinylPage': { pageState: 'opened' } });
+  p.advance(5000);
+  assert.deepEqual(p.collapseBtn.events, [], 'NCM\'s page stays open');
+  // a cover click is NCM's own again
+  const e = p.click(p.cover);
+  assert.equal(e.stopped, false);
+});
+
+test('detach: the injector stops, NCM keeps its own page and the play bar', () => {
+  const p = load();
+  p.boot();
+  p.cmd({ c: 'active', v: true });
+  p.posts.length = 0;
+  assert.equal(p.cmd({ c: 'detach' }), true);
+  assert.ok(!p.bodyClasses.has('bncm-lyrics-open'));
+  assert.ok(p.bodyClasses.has('bncm-stock-vinyl'));
+  assert.deepEqual(p.actions, [], 'NCM\'s page does not open by itself');
+  p.progress(5);
+  p.advance(1000);
+  p.vinyl.next('opening');
+  assert.deepEqual(p.vinyl.seen, ['opening']);
+  assert.deepEqual(p.posts, []);
+});
+
+test('drawn: while the open window cannot be seen progress waits, and catches up after', () => {
+  const p = load();
+  p.boot();
+  p.cmd({ c: 'active', v: true });
+  p.emit('audioplayer.onPlayState', ['1810227452', '1810227452|resume', 1]);
+  p.posts.length = 0;
+  assert.equal(p.cmd({ c: 'drawn', v: false }), true);
+  assert.ok(p.bodyClasses.has('bncm-lyrics-open'), 'still open');
+  let pos = 30;
+  for (let i = 0; i < 90; i++) { p.advance(33); pos += 0.033; p.progress(pos); }
+  assert.deepEqual(p.ofType('progress'), []);
+  // the rest still goes
+  p.emit('audioplayer.onPlayState', ['1810227452', '1810227452|pause', 2]);
+  assert.deepEqual(p.posts, [{ t: 'state', playing: false }]);
+  p.cmd({ c: 'drawn', v: false });
+  assert.equal(p.ofType('progress').length, 0);
+  p.cmd({ c: 'drawn', v: true });
+  const [pr] = p.ofType('progress');
+  assert.equal(pr.force, true);
+  assert.ok(Math.abs(pr.pos - pos) < 0.01, `the newest position, got ${pr.pos}`);
+  p.cmd({ c: 'drawn', v: true });
+  assert.equal(p.ofType('progress').length, 1, 'only when it changes');
+
+  // opening again starts drawn
+  p.cmd({ c: 'drawn', v: false });
+  p.cmd({ c: 'active', v: false });
+  p.cmd({ c: 'active', v: true });
+  p.posts.length = 0;
+  p.advance(33);
+  p.progress(pos + 5);
+  assert.equal(p.ofType('progress').length, 1);
 });

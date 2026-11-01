@@ -24,6 +24,7 @@ const PLAYLIST_BTN = 'footer [data-testid="tid_playbar_playlist_btn"]';
 const PROGRESS_MS = 250;
 const CHECK_DELAY_MS = 30;
 const STOCK_GRACE_MS = 1500; // a shift-click that opened nothing stops letting NCM's page through
+const OPEN_ANSWER_MS = 1500; // the injector answers an open at once; without an answer NCM's page opens
 const FETCH_HOSTS = /^https:\/\/(music\.163\.com|interface\d*\.music\.163\.com)\//;
 const PROGRESS = 'audioplayer.onPlayProgress';
 const PLAY_STATE = 'audioplayer.onPlayState';
@@ -235,6 +236,9 @@ function installLyricsBridge() {
 
   // --- active: the window shows ----------------------------------------------------------------
   let active = false;
+  // false while the open window cannot be seen (covered, screen locked; the page says so): progress
+  // waits, the rest still goes (it is rare)
+  let drawn = true;
   let last = {};
   function sendIfChanged(key, value, msg) {
     const j = JSON.stringify(value);
@@ -278,6 +282,7 @@ function installLyricsBridge() {
     active = !!v;
     document.body?.classList.toggle(OPEN_CLASS, active);
     if (!active) return;
+    drawn = true;
     const s = snapshot();
     post(s);
     last = {};
@@ -308,7 +313,7 @@ function installLyricsBridge() {
   }
 
   function sendProgress(force) {
-    const pr = active && latestProg();
+    const pr = active && drawn && latestProg();
     if (!pr) return;
     const now = performance.now();
     progSentAt = now;
@@ -317,7 +322,7 @@ function installLyricsBridge() {
 
   function onProgress(args) {
     const now = performance.now();
-    if (!active) { rawProg = { args, at: now }; return; }
+    if (!active || !drawn) { rawProg = { args, at: now }; return; }
     const pos = parseFloat(args[1]);
     if (!Number.isFinite(pos)) return;
     const prev = latestProg();
@@ -350,15 +355,43 @@ function installLyricsBridge() {
   // --- opening ------------------------------------------------------------------------------
   let opening = false;
   let fallback = false; // no window to show: NCM's own page opens as it would without us
+  let unanswered = null;
+  let lost = false; // the fallback is the watchdog's: the injector did not answer an open
   function requestOpen() {
     if (opening) return;
     opening = true;
     setTimeout(() => { opening = false; }, 800);
+    if (!greeted) hello(); // a click before boot is done: the injector takes commands from a bridge that said hello
     post({ t: 'open', frame: frame(), fullscreen: fullscreen() });
+    // The injector answers with active or fallback at once. No answer: it is gone (stopped,
+    // crashed) and the binding leads nowhere, so NCM's own page opens, now and from then on.
+    clearTimeout(unanswered);
+    unanswered = setTimeout(() => { detach(); openStock(); lost = true; }, OPEN_ANSWER_MS);
+  }
+  const answered = () => { clearTimeout(unanswered); unanswered = null; };
+  // The answer came after all (the injector was only slow, not gone): later opens are the window's
+  // again. NCM's page, opened meanwhile, stays visible until it closes (endStock).
+  function revive() {
+    if (!lost) return;
+    lost = false;
+    fallback = false;
   }
   const letThrough = () => fallback || hasClass(STOCK_CLASS) || hasClass(PANEL_CLASS);
   // after a fallback every open is NCM's own page, so it stays visible
   const endStock = () => { if (!fallback) document.body?.classList.remove(STOCK_CLASS); };
+  function toStock() {
+    answered();
+    lost = false;
+    fallback = true;
+    document.body?.classList.add(STOCK_CLASS);
+  }
+  const openStock = () => dispatch({ type: 'playing/openVinylPage' });
+  // The window is gone for good (the injector stopped): nothing more is sent, NCM's page is its own
+  // again, and the play bar is no longer slowed.
+  function detach() {
+    toStock();
+    setActive(false);
+  }
 
   function clickEl(el) {
     const r = el.getBoundingClientRect();
@@ -439,7 +472,8 @@ function installLyricsBridge() {
     let tries = 0;
     const step = () => {
       const st = getStore()?.getState()['page:vinylPage']?.pageState;
-      if (st === 'closed' || st === 'closing' || tries++ > 12) { collapsing = false; return; }
+      // NCM's page may be meant to show by now (no answer to the open)
+      if (st === 'closed' || st === 'closing' || letThrough() || tries++ > 12) { collapsing = false; return; }
       const b = document.querySelector(CONTAINER)?.querySelector(COLLAPSE);
       if (b && st === 'opened') clickEl(b);
       setTimeout(step, 250);
@@ -534,23 +568,20 @@ function installLyricsBridge() {
     return null;
   }
 
-  // RNPN's links are NCM 2 hashes (#/m/artist/?id=1); NCM 3 routes through its link action, which
-  // is what its own menus run. A path of NCM 3's own (#/album/1) is pushed as it is.
+  // RNPN's links are NCM 2 hashes (#/m/artist/?id=1), the only form the window sends; NCM 3 routes
+  // them through its link action, which is what its own menus run. Anything else is refused.
   const LINK_TYPES = { artist: 'artist', album: 'album', playlist: 'playlist', personal: 'user', user: 'user' };
   function navigate(hash) {
-    const h = String(hash || '').replace(/^#/, '');
-    const m = /^\/m\/(\w+)\/?\?(?:id|uid)=(\d+)/.exec(h);
-    if (m) {
-      if (LINK_TYPES[m[1]]) {
-        dispatch({ type: 'async:action/doAction', payload: { actionId: 'link', data: { resource: { id: m[2] }, resourceType: LINK_TYPES[m[1]] } } });
-        return true;
-      }
-      if (m[1] === 'song') return pushRoute(`/comment/R_SO_4_${m[2]}`);
-      return false;
+    const m = /^#?\/m\/(\w+)\/?\?(?:id|uid)=(\d+)$/.exec(String(hash || ''));
+    if (!m) return false;
+    if (LINK_TYPES[m[1]]) {
+      dispatch({ type: 'async:action/doAction', payload: { actionId: 'link', data: { resource: { id: m[2] }, resourceType: LINK_TYPES[m[1]] } } });
+      return true;
     }
-    if (/^\/[\w-]/.test(h) && !h.startsWith('/m/')) return pushRoute(h);
+    if (m[1] === 'song') return pushRoute(`/comment/R_SO_4_${m[2]}`);
     return false;
   }
+  // An NCM 3 path, as it is: only for actions that check it against their own list (commentLink).
   function pushRoute(path) {
     const hist = history();
     if (!hist) return false;
@@ -565,11 +596,11 @@ function installLyricsBridge() {
     try { return JSON.parse(text); } catch { return text; }
   }
 
-  // Hand the screen back to NCM: put its window where the lyrics window was and raise it.
-  // `cocoa` is the frame with a bottom-left origin, which winhelper.setWindowPosition uses. That
-  // call also sets NCM's minimum size to the size given (and may re-centre first), so it is made
-  // only when the frame differs, and NCM's own minimum is put back after it.
-  function showNcm(m) {
+  // Put NCM's window where the lyrics window was (`frame`, top-left origin; `cocoa`, the same with a
+  // bottom-left origin, which winhelper.setWindowPosition uses). That call also sets NCM's minimum
+  // size to the size given (and may re-centre first), so it is made only when the frame differs,
+  // and NCM's own minimum is put back after it. It does not raise NCM.
+  function moveNcm(m) {
     const f = m.cocoa;
     const top = m.frame;
     const same = top && [top.x - window.screenX, top.y - window.screenY, top.w - window.outerWidth, top.h - window.outerHeight]
@@ -579,16 +610,32 @@ function installLyricsBridge() {
       const min = ncm.minSize || NCM_MIN;
       winCall('winhelper.setWindowSizeLimit', [{ x: min.w, y: min.h }, { x: 0, y: 0 }]);
     }
+  }
+  // Hand the screen back to NCM: its window where the lyrics window was, raised.
+  function showNcm(m) {
+    moveNcm(m);
     winCall('winhelper.bringWindowToTop', []);
     return true;
+  }
+
+  let greeted = false;
+  function hello() {
+    greeted = true;
+    post({ t: 'hello' });
   }
 
   const reply = (m, ok, v) => post(ok ? { t: 'reply', rid: m.rid, ok: true, data: v } : { t: 'reply', rid: m.rid, ok: false, error: String(v?.message || v) });
 
   const commands = {
-    hello: () => { post({ t: 'hello' }); return true; },
+    hello: () => { hello(); return true; },
     snapshot: () => { post(snapshot()); return true; },
-    active: (m) => { setActive(m.v); return true; },
+    active: (m) => { if (m.v) { answered(); revive(); } setActive(m.v); return true; },
+    drawn: (m) => {
+      const was = drawn;
+      drawn = !!m.v;
+      if (drawn && !was) sendProgress(true); // the page's clock catches up
+      return true;
+    },
     toggle: () => { dispatch({ type: 'playing/switchResumeOrPause', payload: { triggerScene: 'miniBar' } }); return true; },
     prev: () => { dispatch({ type: 'playingList/jump2Track', payload: { flag: -1, type: 'call', triggerScene: 'miniBar' } }); return true; },
     next: () => { dispatch({ type: 'playingList/jump2Track', payload: { flag: 1, type: 'call', triggerScene: 'miniBar' } }); return true; },
@@ -655,19 +702,17 @@ function installLyricsBridge() {
       }
     },
     showNcm,
-    minimizeNcm: () => { winCall('winhelper.showWindow', ['minimize']); return true; },
-    fallback: () => {
-      fallback = true;
-      document.body.classList.add(STOCK_CLASS);
-      dispatch({ type: 'playing/openVinylPage' });
-      return true;
-    },
+    // where the lyrics window was, without raising it first: a minimized window comes back there
+    minimizeNcm: (m) => { moveNcm(m); winCall('winhelper.showWindow', ['minimize']); return true; },
+    fallback: () => { toStock(); openStock(); return true; },
+    // the injector is shutting down while NCM keeps running
+    detach: () => { detach(); return true; },
   };
 
   // Panel and menu actions handed to NCM: lyrics-actions-*.js preludes register them in
   // window.__bncmLyricsActions as name -> (msg, helpers) => plain data (or a promise of it).
   const actions = (window.__bncmLyricsActions ||= {});
-  const helpers = { getStore, dispatch, post, clickEl, nativeCall, navigate, readTrack, trackId, require: webpackRequire };
+  const helpers = { getStore, dispatch, post, clickEl, nativeCall, navigate, pushRoute, readTrack, trackId, require: webpackRequire };
 
   window.__bncmLyricsBridge = {
     cmd(m) {
@@ -709,7 +754,7 @@ function installLyricsBridge() {
     if (!hooked) console.warn('[BetterNCM] lyrics bridge: NCM\'s vinyl page subject not found, watching the store');
     vinylWas = s.getState()['page:vinylPage']?.pageState ?? null;
     s.subscribe(onStore);
-    post({ t: 'hello' });
+    hello();
   }, 300);
 }
 

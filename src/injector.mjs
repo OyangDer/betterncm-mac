@@ -14,7 +14,7 @@ import { buildInjection } from './bundle.mjs';
 import { startServer } from './server.mjs';
 import { seedBundledPlugins, seedPluginMarket, extractPackedPlugins, collectHijacks, collectStartupScripts } from './plugins.mjs';
 import { openDevtools } from './macos.mjs';
-import { createLyricsRelay, lyricsWindowEnabled } from './lyrics-window.mjs';
+import { createLyricsRelay, isBridgeContext, lyricsWindowEnabled } from './lyrics-window.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SETUP_TIMEOUT = 10000;
@@ -137,7 +137,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
   try { logExtraction(extractPackedPlugins()); } catch (e) { log('extractPackedPlugins failed:', e); }
 
   const apiKey = crypto.randomBytes(32).toString('hex'); // 64 characters
-  const sessions = new Map(); // sessionId -> {targetId, scriptId}
+  const sessions = new Map(); // sessionId -> {targetId, scriptId, url, frameId, contexts}
   let cdp = null;
   let cdpPort = null;
   let ncmPid = null;
@@ -146,7 +146,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
   let server = null;
   let finish;
   const finished = new Promise((r) => { finish = r; });
-  const lyrics = createLyricsRelay({ getCdp: () => cdp });
+  const lyrics = createLyricsRelay({ getCdp: () => cdp, fromBridgeContext: (sid, id) => isBridgeContext(sessions.get(sid), id) });
 
   function injectionInputs() {
     const safe = isSafeMode();
@@ -180,7 +180,8 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
 
   async function setupSession(sessionId, targetInfo, waiting) {
     const { targetId, url } = targetInfo;
-    sessions.set(sessionId, { targetId, scriptId: null, url, exceptions: 0 });
+    // frameId: the top frame's, which is the target's id; contexts: default worlds' id -> frame id
+    sessions.set(sessionId, { targetId, scriptId: null, url, exceptions: 0, frameId: targetId, contexts: new Map() });
     const opt = { timeout: SETUP_TIMEOUT };
     try {
       await cdp.send('Page.enable', {}, sessionId, opt);
@@ -253,8 +254,15 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
     });
     cdp.on('Page.frameNavigated', (p, sid) => {
       const s = sessions.get(sid);
-      if (s && !p.frame?.parentId) { s.exceptions = 0; s.url = p.frame?.url; }
+      if (s && !p.frame?.parentId) { s.exceptions = 0; s.url = p.frame?.url; s.frameId = p.frame?.id || s.frameId; }
     });
+    // Which document a lyrics binding call comes from (Runtime is enabled for every session).
+    cdp.on('Runtime.executionContextCreated', ({ context: c } = {}, sid) => {
+      const s = sessions.get(sid);
+      if (s && c?.auxData?.isDefault) s.contexts.set(c.id, c.auxData.frameId);
+    });
+    cdp.on('Runtime.executionContextDestroyed', (p, sid) => { sessions.get(sid)?.contexts.delete(p.executionContextId); });
+    cdp.on('Runtime.executionContextsCleared', (_p, sid) => { sessions.get(sid)?.contexts.clear(); });
     cdp.once('close', () => { onBrowserClose().catch((e) => log('reconnect failed:', e)); });
 
     await cdp.send('Target.setDiscoverTargets', { discover: true });
@@ -279,6 +287,8 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
     sessions.clear();
     if (shuttingDown || restarting) return;
     log('browser websocket closed');
+    // NCM quit (or is restarting itself): the lyrics window must not stay up over nothing
+    lyrics.ncmGone();
     while (!shuttingDown && !restarting) {
       let ncm = await findNcm();
       if (!ncm && mode === 'launch') {
@@ -469,6 +479,8 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
     log('shutting down');
     fs.unwatchFile(path.join(getDataPath(), 'config.json'), onConfigFileChange);
     disposeDevWatch?.();
+    // NCM may keep running: its now-playing page is its own again (before the connection goes)
+    await lyrics.detachBridge();
     lyrics.dispose();
     try { if (cdp && !cdp.closed) cdp.close(); } catch { /* ignore */ }
     try { await server?.close(); } catch { /* ignore */ }

@@ -119,7 +119,7 @@ function installLyricsCommentActions() {
     return true;
   };
 
-  actions.commentLink = async (m, { dispatch, navigate }) => {
+  actions.commentLink = async (m, { dispatch, pushRoute }) => {
     const path = str(m.path);
     if (!ROUTES.test(path)) throw new Error('route not allowed');
     // a user's page by id goes through NCM's link action, as its menus open artists and users
@@ -130,7 +130,7 @@ function installLyricsCommentActions() {
     }
     // NCM's own clicks history.push these paths (查看更多精彩评论 does, checked); its link action is
     // the fallback when the history is not found
-    if (navigate(path)) return true;
+    if (pushRoute(path)) return true;
     dispatch({
       type: 'async:action/doAction',
       payload: { actionId: 'link', data: { resource: {}, resourceType: 'unknown', to: { linkPath: path } }, eventType: 'click' },

@@ -12,6 +12,9 @@ const HIDE_AFTER_NCM_MS = 120; // let NCM's window come up before ours goes, so 
 // Start the host, hidden, this long after NCM's page is ready, so the first open is instant.
 const PREWARM_MS = 4000;
 const NO_BRIDGE = 'no-bridge';
+const DETACH_MS = 300; // shutting down: how long the bridge gets to let go of NCM's page
+// What the bridge posts; anything else (the host's own host.* messages above all) is not passed on.
+const BRIDGE_TYPES = new Set(['hello', 'open', 'snapshot', 'track', 'state', 'progress', 'liked', 'mode', 'volume', 'roaming', 'reply']);
 // Asks a page's bridge to say hello again: its first hello can come before the binding is there
 // (an injector attaching to a running NCM, or re-registering after a config change).
 const HELLO = `window.__bncmLyricsBridge ? window.__bncmLyricsBridge.cmd({ c: 'hello' }) : '${NO_BRIDGE}'`;
@@ -30,16 +33,33 @@ export function hostPaths(root = PROJECT_ROOT) {
 }
 
 /**
+ * Whether a binding call comes from where the bridge runs: the default world of the top frame of an
+ * orpheus://orpheus/ page. Every document in an attached target has the binding (it stays across
+ * navigations and is in every frame), so the call's execution context is what tells them apart.
+ * `s` is the injector's record of the session: `url` and `frameId` of its top frame (the target id
+ * until a navigation says otherwise) and `contexts`, default contexts' id -> frame id.
+ */
+export function isBridgeContext(s, contextId) {
+  if (!s || typeof s.url !== 'string' || !s.url.startsWith('orpheus://orpheus/')) return false;
+  const top = s.frameId || s.targetId;
+  return !!top && s.contexts?.get(contextId) === top;
+}
+
+/**
  * getCdp: () => the browser connection (send(method, params, sessionId)).
+ * fromBridgeContext: (sessionId, executionContextId) => whether a binding call may be the bridge's
+ *   (the injector's isBridgeContext); nothing is accepted without it.
  * spawnHost: injectable for tests; defaults to child_process.spawn of the host binary.
  * paths: injectable for tests; defaults to hostPaths(root).
  */
-export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = null, paths = null, prewarmMs = PREWARM_MS } = {}) {
+export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, root = PROJECT_ROOT, spawnHost = null, paths = null,
+  prewarmMs = PREWARM_MS } = {}) {
   let bridgeSid = null; // the session whose page runs the bridge (NCM's main window)
   let host = null;
   let prewarm = null;
   let disposed = false;
   let open = false;
+  const bound = new Set(); // sessions given the binding
   const evals = new Map();
   let evalSeq = 0;
 
@@ -48,11 +68,11 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
    * promise is not awaited: requests answer through the binding themselves, and awaiting a slow
    * fetch or a dialog the user is filling in would time out here and fail the request early.
    */
-  function evalInBridge(cmd) {
+  function evalInBridge(cmd, timeout = 5000) {
     const cdp = getCdp();
     if (!cdp || cdp.closed || !bridgeSid) return Promise.resolve(NO_BRIDGE);
     const expression = `window.__bncmLyricsBridge ? window.__bncmLyricsBridge.cmd(${JSON.stringify(cmd)}) : '${NO_BRIDGE}'`;
-    return cdp.send('Runtime.evaluate', { expression, awaitPromise: false, returnByValue: true }, bridgeSid, { timeout: 5000 })
+    return cdp.send('Runtime.evaluate', { expression, awaitPromise: false, returnByValue: true }, bridgeSid, { timeout })
       .then((r) => (r?.exceptionDetails ? NO_BRIDGE : r?.result?.value ?? null))
       .catch((e) => { log('lyrics: bridge command failed:', cmd.c, e.message); return NO_BRIDGE; });
   }
@@ -78,6 +98,7 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
 
   function startHost() {
     if (host) return host;
+    if (disposed) return null;
     const p = paths || hostPaths(root);
     if (!spawnHost && !fs.existsSync(p.bin)) {
       log('lyrics: host binary missing at', p.bin);
@@ -134,6 +155,15 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
     return child;
   }
 
+  /** Ends the host: it quits when its stdin closes, and is killed if it has not a second later. */
+  function stopHost() {
+    if (!host) return;
+    try { host.stdin.end(); } catch { /* gone */ }
+    const h = host;
+    setTimeout(() => { try { h.kill(); } catch { /* gone */ } }, 1000).unref?.();
+    host = null;
+  }
+
   async function onHost(msg) {
     if (msg.from === 'web') {
       const m = msg.msg;
@@ -152,7 +182,7 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
       if (!open) evalInBridge({ c: 'active', v: false });
     } else if (msg.op === 'minimizing') {
       open = false;
-      evalInBridge({ c: 'minimizeNcm' });
+      evalInBridge({ c: 'minimizeNcm', frame: msg.frame, cocoa: msg.cocoa });
       evalInBridge({ c: 'active', v: false });
     } else if (msg.op === 'evalResult') {
       const w = evals.get(msg.id);
@@ -167,6 +197,9 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
       const fresh = sid !== bridgeSid;
       bridgeSid = sid;
       if (fresh) log('lyrics: bridge ready');
+      // A bridge left active by an injector that ended with the window open (killed, crashed)
+      // would keep sending progress and keep NCM's play bar slowed.
+      if (!open) evalInBridge({ c: 'active', v: false });
       if (!host) {
         if (prewarmMs != null && !prewarm && !disposed) {
           prewarm = setTimeout(() => { prewarm = null; if (!disposed) startHost(); }, prewarmMs);
@@ -179,7 +212,8 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
       if (open) evalInBridge({ c: 'active', v: true });
       return;
     }
-    if (sid !== bridgeSid) bridgeSid = sid;
+    // only the session that said hello runs the bridge
+    if (sid !== bridgeSid || !BRIDGE_TYPES.has(msg.t)) return;
     if (msg.t === 'open') {
       if (!startHost()) {
         // no window to show: let NCM open its own page after all
@@ -200,32 +234,63 @@ export function createLyricsRelay({ getCdp, root = PROJECT_ROOT, spawnHost = nul
     async attachSession(sessionId) {
       const cdp = getCdp();
       await cdp.send('Runtime.addBinding', { name: BINDING }, sessionId, { timeout: 5000 });
+      bound.add(sessionId);
+      disposed = false; // the window was turned on again
       // Not awaited: a new target waits for the debugger until its setup is done. A page that
       // has no bridge yet says hello itself once it boots.
       cdp.send('Runtime.evaluate', { expression: HELLO, returnByValue: true }, sessionId, { timeout: 5000 })
         .catch(() => { /* not a page, or it went away */ });
     },
     onBindingCalled(p, sid) {
-      if (p?.name !== BINDING) return;
+      if (p?.name !== BINDING || !fromBridgeContext(sid, p.executionContextId)) return;
       let msg;
       try { msg = JSON.parse(p.payload); } catch { return; }
       if (!msg || typeof msg !== 'object') return;
       onBridge(msg, sid).catch((e) => log('lyrics: bridge message failed:', e.message));
     },
     detachSession(sid) {
+      bound.delete(sid);
       if (sid === bridgeSid) bridgeSid = null;
     },
+    /**
+     * NCM's connection is gone (NCM quit, or is restarting itself): the window's controls lead
+     * nowhere. The window goes with its host, which also takes a full-screen window's Space away
+     * (hiding alone leaves it); the next hello starts a fresh host.
+     */
+    ncmGone() {
+      bridgeSid = null;
+      bound.clear();
+      clearTimeout(prewarm);
+      prewarm = null;
+      rejectPending('NCM is gone');
+      if (open || host) {
+        open = false;
+        toHost({ to: 'web', msg: { t: 'state', playing: false } });
+        toHost({ to: 'host', op: 'hide' });
+        stopHost();
+      }
+    },
+    /**
+     * Shutting down while NCM may keep running: the bridge stops sending and lets NCM open its own
+     * page again. Best effort, and short.
+     */
+    detachBridge() {
+      return evalInBridge({ c: 'detach' }, DETACH_MS);
+    },
+    /** The window is turned off (or the injector stops). */
     dispose() {
       disposed = true;
       clearTimeout(prewarm);
+      prewarm = null;
+      if (open) evalInBridge({ c: 'active', v: false });
       open = false;
       rejectPending('the lyrics window was closed');
-      if (host) {
-        try { host.stdin.end(); } catch { /* gone */ }
-        const h = host;
-        setTimeout(() => { try { h.kill(); } catch { /* gone */ } }, 1000).unref?.();
-        host = null;
+      stopHost();
+      const cdp = getCdp();
+      if (cdp && !cdp.closed) {
+        for (const sid of bound) cdp.send('Runtime.removeBinding', { name: BINDING }, sid).catch(() => { /* gone */ });
       }
+      bound.clear();
     },
     /** Development: the value of `js` evaluated in the window's page (a promise is awaited). */
     evalInWindow(js) {
