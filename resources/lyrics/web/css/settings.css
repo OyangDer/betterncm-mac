@@ -15,7 +15,7 @@
   top: 56px;
   right: 14px;
   z-index: 1000; /* above #rnp-view (998) */
-  width: min(488px, calc(100vw - 28px));
+  width: min(448px, calc(100vw - 28px)); /* as wide as the tab bar */
   /* one size whatever is shown: the groups scroll inside it */
   height: min(600px, calc(100vh - 70px));
   display: flex;
@@ -56,7 +56,8 @@
 .bncm-set-side {
   flex: none;
   display: flex;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 2px;
   padding: 10px 14px;
   overflow: auto hidden;
   scrollbar-width: none;
