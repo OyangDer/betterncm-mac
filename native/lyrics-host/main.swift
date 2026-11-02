@@ -240,6 +240,13 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             if web.responds(to: sel) { web.perform(sel, with: false) }
         }
 
+        // While NCM is the active app, WebKit sends this window no mouse moves, so the page's hover
+        // (the top-right tools, the views switcher) never comes up. The window covers NCM: a pointer
+        // entering it, or moving over it (it may already be there when NCM is activated), is the user
+        // turning to the player, so it takes the focus then.
+        window.contentView!.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+                                                           owner: self, userInfo: nil))
+
         strip = DragStrip(frame: .zero)
         window.contentView!.addSubview(strip)
         layoutStrip()
@@ -420,6 +427,25 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         sendWindowState()
     }
 
+    @objc(mouseEntered:) func mouseEntered(with event: NSEvent) { takeFocusFromNcm() }
+    @objc(mouseMoved:) func mouseMoved(with event: NSEvent) { takeFocusFromNcm() }
+
+    func takeFocusFromNcm() {
+        guard wantShown, !closing, window.isVisible,
+              NSWorkspace.shared.frontmostApplication?.bundleIdentifier == NCM_BUNDLE_ID else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKey()
+        // the page learns where the pointer is from the next move, which may not come (it can already
+        // be resting on the switcher): one is sent once the focus has arrived
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self, self.window.isKeyWindow,
+                  let e = NSEvent.mouseEvent(with: .mouseMoved, location: self.window.mouseLocationOutsideOfEventStream, modifierFlags: [],
+                                             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: self.window.windowNumber,
+                                             context: nil, eventNumber: 0, clickCount: 0, pressure: 0) else { return }
+            self.web.mouseMoved(with: e)
+        }
+    }
+
     // MARK: NCM's full screen
 
     // no tiling from the green button's hover menu: that is AppKit's full screen, not NCM's
@@ -475,6 +501,9 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
             if v { window.styleMask.remove(.titled) } else { window.styleMask.insert(.titled); hookButtons() }
             web.frame = window.contentView!.bounds
             layoutStrip()
+            // a new style mask rebuilds the frame view and leaves the window itself first responder:
+            // keys (⌃⌘F to leave, Esc, space) would no longer reach the page
+            window.makeFirstResponder(web)
         }
         window.collectionBehavior = v ? Host.overNcm : Host.windowed
         strip.isHidden = v // nothing to drag over a full screen
