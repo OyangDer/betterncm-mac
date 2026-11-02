@@ -278,7 +278,7 @@ function sliderRow(r) {
   Object.assign(input, { type: 'range', min: r.min, max: r.max, step: r.step });
   input.setAttribute('aria-label', r.label);
   const def = DEFAULTS[r.k];
-  const rst = resetButton(r.auto ? '恢复自动' : '恢复默认', () => update({ [r.k]: def }));
+  const rst = resetButton(r.auto && !def ? '恢复自动' : '恢复默认', () => update({ [r.k]: def }));
   line.append(input, rst);
   row.append(line);
 

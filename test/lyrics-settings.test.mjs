@@ -40,7 +40,7 @@ test("RNPN's settings carry over", () => {
   assert.equal(s.showTranslation, false);
   assert.equal(s.karaoke, true);
   assert.equal(s.blur && s.fade && s.zoom, true);
-  assert.equal(s.translationEm, 0, "RNPN's default 1em becomes our automatic size");
+  assert.equal(s.translationEm, DEFAULTS.translationEm, "RNPN's default 1em becomes our default size");
   assert.equal(s.subtitle, 'alias');
   assert.equal(s.bgType, 'blur');
 });
@@ -53,5 +53,7 @@ test('mixed and missing RNPN values map sensibly', () => {
   assert.equal(fromRnp({ 'current-lyric-alignment-percentage': '30' }).alignment, 30);
   assert.equal(fromRnp({ 'lyric-translation-size-em': '0.8' }).translationEm, 0.8);
   assert.deepEqual(fromRnp({ 'custom-font': 'true', 'font-family': '["思源黑体","苹方"]' }).fontList, ['思源黑体', '苹方']);
+  assert.equal(fromRnp({ 'custom-font': 'false' }).font, 'system');
+  assert.deepEqual(fromRnp({ 'custom-font': 'true' }).fontList, DEFAULTS.fontList, 'no RNPN list keeps ours');
   assert.deepEqual(fromRnp({}), { ...DEFAULTS });
 });

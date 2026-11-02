@@ -7,14 +7,14 @@ import { state, set } from './state.js';
 export const DEFAULTS = Object.freeze({
   version: 1,
   // 歌词 · 显示
-  showTranslation: true,
-  showRomaji: false,
+  showTranslation: false,
+  showRomaji: true,
   karaoke: true,
-  contributors: 'hover', // show | hover | hide
+  contributors: 'hide', // show | hover | hide
   // 歌词 · 大小
-  fontSize: 32, // RNPN's lyric-font-size: px for a window as large as the screen, scaled down with it
-  translationEm: 0, // 0: automatic, min(1em, 0.62em + 6px)
-  translationWeight: 'medium', // regular | medium | semibold; RNPN drew translations regular
+  fontSize: 54, // RNPN's lyric-font-size: px for a window as large as the screen, scaled down with it
+  translationEm: 0.65, // 0: automatic, min(1em, 0.62em + 6px)
+  translationWeight: 'semibold', // regular | medium | semibold; RNPN drew translations regular
   romajiEm: 0.6,
   bold: true,
   // 歌词 · 动效
@@ -22,15 +22,15 @@ export const DEFAULTS = Object.freeze({
   karaokeAnim: 'float', // float | slide
   stagger: true,
   timing: 'smooth', // smooth | sharp | easeout | lazy
-  zoom: false,
-  fade: false,
-  blur: false,
+  zoom: true,
+  fade: true,
+  blur: true,
   glow: true,
   // 歌词 · 时间
   offset: 0, // ms, positive shows lyrics earlier
   // 外观
   scheme: 'auto', // auto | dark | light
-  accent: 'primary', // off | primary | secondary | tertiary
+  accent: 'off', // off | primary | secondary | tertiary
   textEffect: 'none', // none | shadow | glow
   showControls: true,
   // 背景
@@ -45,8 +45,8 @@ export const DEFAULTS = Object.freeze({
   coverPos: 'center', // center | bottomLeft
   subtitle: 'alias', // alias | trans | both | none
   // 字体
-  font: 'system', // system | custom
-  fontList: [],
+  font: 'custom', // system | custom
+  fontList: ['PingFang SC'],
 });
 
 const ENUMS = {
@@ -137,11 +137,15 @@ export function fromRnp(ls) {
   else if (ls['song-alias-display-mode']) {
     s.subtitle = { 'alias-first': 'alias', 'translation-first': 'trans', both: 'both' }[ls['song-alias-display-mode']] || 'alias';
   }
-  if (b('custom-font')) s.font = 'custom';
-  try {
-    const fl = JSON.parse(ls['font-family'] || '[]');
-    if (Array.isArray(fl)) s.fontList = fl.map((f) => (typeof f === 'string' ? f : f?.name || f?.family)).filter(Boolean);
-  } catch { /* none */ }
+  const custom = b('custom-font');
+  if (custom !== undefined) s.font = custom ? 'custom' : 'system';
+  // only a list RNPN has: none keeps ours
+  if (ls['font-family'] != null) {
+    try {
+      const fl = JSON.parse(ls['font-family'] || '[]');
+      if (Array.isArray(fl)) s.fontList = fl.map((f) => (typeof f === 'string' ? f : f?.name || f?.family)).filter(Boolean);
+    } catch { /* none */ }
+  }
   return normalize(s);
 }
 
