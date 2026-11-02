@@ -66,10 +66,14 @@ function __bncmInstallChannelShim() {
   // At every load NCM's page sets its window up: winhelper.setWindowPosition with the saved
   // windowed frame, showWindow("maximize"), initMainWindow. Done to a window in full screen (a
   // reload: a plugin switched, BetterNCM restarted) it drops out of full screen half way, left
-  // without its close / minimize / zoom buttons. So on a reload (this window already loaded once:
+  // without its close / minimize / zoom buttons. Its app.setCefNativeTransparentUIEnabled, sent a
+  // little later, hides the title bar a full-screen window shows at the top edge: the buttons are
+  // gone until full screen is left and entered again. So on a reload (this window already loaded once:
   // a flag in sessionStorage) native is asked first whether the window is in full screen; until it
   // answers these calls wait, and in full screen they are answered here and not sent.
-  const WINDOW_SETUP = new Set(['winhelper.setWindowPosition', 'winhelper.setNativeWindowRect', 'winhelper.initMainWindow']);
+  const WINDOW_SETUP = new Set([
+    'winhelper.setWindowPosition', 'winhelper.setNativeWindowRect', 'winhelper.initMainWindow', 'app.setCefNativeTransparentUIEnabled',
+  ]);
   const LOADED_BEFORE = 'bncm-main-window-loaded';
   let setupHeld = 'unchecked'; // then [] while native is asked, and 'fullscreen' or null (send them)
   function isWindowSetup(msg) {
