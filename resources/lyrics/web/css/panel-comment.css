@@ -2,7 +2,8 @@
    the panel (bspec panels-visual.md §3). Colours are the panel palette (panels.css): FG at NCM's
    alphas, the nickname and links at .72 as compat-rnp-panels.js forces them. */
 .bncm-panel-comment .bncm-cm-scroll {
-  box-sizing: border-box; padding: 0 0 112px; gap: 20px;
+  /* 10px on the left, given back by the margin: avatar frames (.pendant) reach 10px past the avatar */
+  box-sizing: border-box; padding: 0 0 112px 10px; margin-left: -10px; gap: 20px;
   font-size: 12px; line-height: 16.8px;
 }
 .bncm-panel-comment .bncm-cm-scroll > * { flex: none; }
