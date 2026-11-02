@@ -1,6 +1,6 @@
 {
   "name": "betterncm-mac",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "BetterNCM II for NetEase Cloud Music on macOS, injected over the Chrome DevTools Protocol without modifying the app",
   "keywords": [
     "betterncm",
