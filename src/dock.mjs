@@ -59,9 +59,9 @@ const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 
 
 // Imports the edited copy and restarts the Dock, then checks the change held: a Dock that is busy
 // saving its own state (an app was just launched, as NCM is on uninstall) writes its old tile list
-// back over ours, so it is imported again, up to three times. It can do that seconds later (NCM,
-// reopened just before on uninstall, still finishing its launch), so the change must still hold
-// at a second look.
+// back over ours, so it is imported again, up to three times. It can do that seconds later, so the
+// change must still hold at a second look. (While an app is launching it does so every time:
+// uninstall changes the Dock before it reopens NCM.)
 function importAndRestart(domain, file, held) {
   const holds = () => withExport(domain, (now) => held(tileUrls(now)));
   for (let attempt = 0; attempt < 3; attempt++) {

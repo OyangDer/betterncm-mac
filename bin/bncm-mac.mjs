@@ -586,19 +586,22 @@ async function cmdUninstall(values) {
   // first the agent, which would otherwise start the injector again
   await cmdUninstallAgent();
   await stopInjector();
+  const app = appPath(values);
+  const ours = fs.existsSync(app) && bundleIdOf(app) === WRAPPER_ID;
+  // The Dock before NCM is reopened: a Dock restarted while NCM is launching saves its old tiles
+  // over the new ones as it quits, every time. Restarted now, it holds the new ones itself.
+  if (ours) restoreDock(app);
   // before the app goes: this runs from it, and imports what it needs on the way
   const reopened = await restoreNcm();
 
-  const app = appPath(values);
   if (!fs.existsSync(app)) {
     console.log(`${app} is not installed`);
     unpinQuietly(app);
   }
-  else if (bundleIdOf(app) !== WRAPPER_ID) console.log(`${app} is not a BetterNCM wrapper; left alone`);
+  else if (!ours) console.log(`${app} is not a BetterNCM wrapper; left alone`);
   else {
     fs.rmSync(app, { recursive: true, force: true });
     console.log(`removed ${app}`);
-    restoreDock(app);
     forgetAppPath(app);
   }
 
