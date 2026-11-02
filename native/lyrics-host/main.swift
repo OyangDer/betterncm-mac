@@ -436,7 +436,7 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
         // The tracking area also reports moves under other apps' windows that leave NCM frontmost
         // (Control Center, the menu bar's menus): taking the focus then closes them, a submenu as
         // soon as the pointer reaches it. Only a pointer on this window is the user turning to it.
-        guard NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber else { return }
+        guard !otherWindowInTheWay() else { return }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKey()
         // the page learns where the pointer is from the next move, which may not come (it can already
@@ -447,6 +447,28 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
                                              timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: self.window.windowNumber,
                                              context: nil, eventNumber: 0, clickCount: 0, pressure: 0) else { return }
             self.web.mouseMoved(with: e)
+        }
+    }
+
+    let menuLevels = Int(CGWindowLevelForKey(.popUpMenuWindow))..<Int(CGWindowLevelForKey(.screenSaverWindow))
+    /// Whether a window of another app (or the system's) above this one is under the pointer, or a
+    /// menu of one is open anywhere: Control Center is one menu-level window over the screen's right
+    /// side, and the pointer leaving it for this window must not close it. (Input methods keep a
+    /// window far above the menu levels all the time.) NSWindow.windowNumber(at:) misses Control
+    /// Center; the window server's list does not.
+    func otherWindowInTheWay() -> Bool {
+        guard let top = NSScreen.screens.first?.frame.maxY,
+              let list = CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow], CGWindowID(window.windowNumber)) as? [[String: Any]]
+        else { return false }
+        let p = NSEvent.mouseLocation
+        let at = CGPoint(x: p.x, y: top - p.y) // the window server's coordinates: y down from the main screen's top
+        let me = ProcessInfo.processInfo.processIdentifier
+        return list.contains { w in
+            guard (w[kCGWindowOwnerPID as String] as? Int32) != me, (w[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let b = w[kCGWindowBounds as String] as? NSDictionary, let r = CGRect(dictionaryRepresentation: b as CFDictionary)
+            else { return false }
+            let layer = w[kCGWindowLayer as String] as? Int ?? 0
+            return (menuLevels.contains(layer) && r.width > 1 && r.height > 1) || r.contains(at)
         }
     }
 
