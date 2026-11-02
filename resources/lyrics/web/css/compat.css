@@ -223,6 +223,15 @@ body.rnp-lyric-page-open #root .ad-tutorial-step-0-stop > [class*="scrollCss_"] 
 }
 #bncm-rnp-views.bncm-views-bottom.bncm-views-up.bncm-open::before { width: 34px; height: calc(var(--bncm-views-open-width, 28px) + 6px); }
 #bncm-rnp-views.bncm-views-bottom button { left: 0; right: auto; }
+/* The hover area of the open capsule: all of it, gaps included, and a margin around it, so the
+   pointer drifting a little off a button does not fold it (the buttons sit outside the 28px box). */
+#bncm-rnp-views.bncm-views-bottom::after {
+  content: ""; position: absolute; left: -10px; top: -10px; width: 48px; height: 48px;
+  pointer-events: none; z-index: -1; /* under the buttons: it only catches the pointer between them */
+}
+#bncm-rnp-views.bncm-views-bottom.bncm-open::after { width: calc(var(--bncm-views-open-width, 28px) + 20px); pointer-events: auto; }
+#bncm-rnp-views.bncm-views-bottom.bncm-views-up::after { top: auto; bottom: -10px; }
+#bncm-rnp-views.bncm-views-bottom.bncm-views-up.bncm-open::after { width: 48px; height: calc(var(--bncm-views-open-width, 28px) + 20px); }
 #bncm-rnp-views.bncm-views-bottom button svg { width: 22px; height: 22px; }
 #bncm-rnp-views.bncm-views-bottom button[aria-pressed="true"] svg { opacity: 0.85; }
 #bncm-rnp-views.bncm-views-bottom.bncm-open button { transform: translateX(calc(var(--slot) * 32px)); }

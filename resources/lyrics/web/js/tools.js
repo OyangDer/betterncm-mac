@@ -10,6 +10,7 @@ const BTN = 28;
 const GAP = 4;
 const RIM = 3;
 const HOVER_INTENT_MS = 120;
+const LEAVE_GRACE_MS = 300; // the pointer may leave the open capsule this long before it folds
 const svg = (inner) => `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
 export const VIEWS = [
   { id: 'lyrics', label: '歌词', icon: svg('<path d="M4.5 4h11A1.5 1.5 0 0 1 17 5.5v7a1.5 1.5 0 0 1-1.5 1.5H10l-3.6 2.8V14H4.5A1.5 1.5 0 0 1 3 12.5v-7A1.5 1.5 0 0 1 4.5 4z"/><path d="M7.6 7.4v1.4c0 .9-.4 1.5-1.1 1.8M11.6 7.4v1.4c0 .9-.4 1.5-1.1 1.8" stroke-width="1.7"/>') },
@@ -25,6 +26,7 @@ let topSlot = null; // where the switcher sits in the top row
 let bottomSlot = null; // RNPN's playlist button, which it replaces in the controls
 let held = false;
 let openTimer = 0;
+let closeTimer = 0;
 
 async function lazy(path, fn, ...args) {
   try {
@@ -73,9 +75,13 @@ export function mountTools({ collapse }) {
     clearTimeout(openTimer);
     openTimer = setTimeout(() => { if (!held && switcher.matches(':hover')) openSwitcher(); }, HOVER_INTENT_MS);
   };
-  switcher.addEventListener('mouseenter', () => { if (!held) armOpen(); });
-  switcher.addEventListener('mousemove', () => { if (!held && !switcher.classList.contains('bncm-open')) armOpen(); });
-  switcher.addEventListener('mouseleave', () => { clearTimeout(openTimer); held = false; switcher.classList.remove('bncm-open'); });
+  switcher.addEventListener('mouseenter', () => { clearTimeout(closeTimer); if (!held) armOpen(); });
+  switcher.addEventListener('mousemove', () => { clearTimeout(closeTimer); if (!held && !switcher.classList.contains('bncm-open')) armOpen(); });
+  switcher.addEventListener('mouseleave', () => {
+    clearTimeout(openTimer);
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => { held = false; switcher.classList.remove('bncm-open'); }, LEAVE_GRACE_MS);
+  });
   watch('view', (v) => { renderSwitcher(); lazy('./panels/index.js', 'showView', v); });
   watch('track', renderSwitcher);
   topSlot = { parent: switcher.parentElement, next: switcher.nextSibling };
