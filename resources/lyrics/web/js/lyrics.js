@@ -282,10 +282,13 @@ function scheduleNext(t) {
 }
 
 // --- layout pass (RNPN B@365402) ---------------------------------------------------------------
+const ZOOM_RANGE = 0.08; // the farthest lines at 0.92
 function effects(k) {
   const s = S();
   return {
-    scale: s.zoom ? Math.pow(Math.max(1 - 0.2 * k, 0), 3) * 0.3 + 0.7 : 1,
+    // RNPN shrank the other lines to 0.7, which leaves them a strip of the column (they wrap at the
+    // full width first); like Apple Music they keep nearly all of it, the current line a touch larger
+    scale: s.zoom ? Math.pow(Math.max(1 - 0.2 * k, 0), 3) * ZOOM_RANGE + 1 - ZOOM_RANGE : 1,
     blur: s.blur && !scrolling ? (k === 0 ? 0 : Math.min(0.5 + k, 4.5)) : 0,
     opacity: s.fade && !scrolling ? (k <= 1 ? 1 : Math.max(1 - 0.4 * (k - 1), 0)) : 1,
   };
