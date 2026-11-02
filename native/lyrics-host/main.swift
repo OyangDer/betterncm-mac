@@ -433,6 +433,10 @@ final class Host: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMes
     func takeFocusFromNcm() {
         guard wantShown, !closing, window.isVisible,
               NSWorkspace.shared.frontmostApplication?.bundleIdentifier == NCM_BUNDLE_ID else { return }
+        // The tracking area also reports moves under other apps' windows that leave NCM frontmost
+        // (Control Center, the menu bar's menus): taking the focus then closes them, a submenu as
+        // soon as the pointer reaches it. Only a pointer on this window is the user turning to it.
+        guard NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber else { return }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKey()
         // the page learns where the pointer is from the next move, which may not come (it can already
