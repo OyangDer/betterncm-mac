@@ -19,6 +19,7 @@
   /* one size whatever is shown: the groups scroll inside it */
   height: min(600px, calc(100vh - 70px));
   display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   background: rgba(var(--bg), .5);
   -webkit-backdrop-filter: blur(40px) saturate(1.6);
@@ -51,29 +52,29 @@
 .bncm-settings [hidden] { display: none !important; }
 .bncm-settings svg { display: block; flex: none; }
 
-/* --- sidebar ------------------------------------------------------------------------------------ */
+/* --- tab bar: one pill per group across the top; the column below gets the whole width -------- */
 .bncm-set-side {
   flex: none;
-  width: 132px;
-  padding: 12px 8px;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: rgba(var(--fg), .035);
-  border-right: .5px solid var(--line);
+  gap: 4px;
+  padding: 10px 14px;
+  overflow: auto hidden;
+  scrollbar-width: none;
+  border-bottom: .5px solid var(--line);
 }
-.bncm-set-tab {
+.bncm-set-side::-webkit-scrollbar { display: none; }
+.bncm-settings .bncm-set-tab { /* over the button reset */
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 8px;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px 0 9px;
+  border-radius: 14px;
   color: var(--t2) !important;
   white-space: nowrap;
 }
-.bncm-set-tab svg { width: 17px; height: 17px; opacity: .85; }
-.bncm-set-tab span { overflow: hidden; text-overflow: ellipsis; }
+.bncm-set-tab svg { width: 15px; height: 15px; opacity: .85; }
 .bncm-set-tab:hover { background: rgba(var(--fg), .06) !important; color: var(--t1) !important; }
 .bncm-set-tab.on { background: var(--fill2) !important; color: var(--t1) !important; font-weight: 500; }
 .bncm-set-tab.on svg { color: rgb(var(--ac)); opacity: 1; }
@@ -81,7 +82,7 @@
 /* --- pages -------------------------------------------------------------------------------------- */
 .bncm-set-main {
   flex: 1;
-  min-width: 0;
+  min-height: 0;
   overflow: hidden auto;
   overscroll-behavior: contain;
   padding: 6px 14px 18px;
@@ -302,10 +303,9 @@
 body.rnp-light .bncm-settings, body.rnp-auto.rnp-system-light .bncm-settings { box-shadow: 0 16px 44px rgba(0, 0, 0, .18), 0 0 0 .5px rgba(0, 0, 0, .12); }
 body.rnp-light .bncm-set-danger, body.rnp-auto.rnp-system-light .bncm-set-danger { color: rgb(215, 0, 21) !important; }
 
-/* small windows: the sidebar keeps only its icons */
-@media (max-width: 600px) {
-  .bncm-set-side { width: 48px; padding: 12px 6px; }
-  .bncm-set-tab { justify-content: center; padding: 0; }
+/* narrow windows: the tabs keep only their icons */
+@media (max-width: 480px) {
+  .bncm-settings .bncm-set-tab { padding: 0 9px; }
   .bncm-set-tab span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {

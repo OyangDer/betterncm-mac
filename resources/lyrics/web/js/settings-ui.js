@@ -103,7 +103,7 @@ const GROUPS = [
     ],
   },
   {
-    id: 'cover', label: '封面与信息', sections: [
+    id: 'cover', label: '封面与信息', tab: '封面', sections: [
       {
         title: '封面', rows: [
           { type: 'seg', k: 'coverShape', label: '形状', options: SEG([['square', '方形'], ['round', '圆形']]) },
@@ -137,6 +137,7 @@ const GROUPS = [
           { type: 'info', label: '视觉设计', value: `RefinedNowPlayingNext ${RNPN_VERSION}` },
           { type: 'info', label: '作者', value: 'MiHN' },
           { type: 'info', label: '原作者', value: 'solstice23' },
+          { type: 'info', label: '性能与视觉优化', value: 'OyangDer' },
           { type: 'note', text: '歌词窗口沿用 RefinedNowPlayingNext 的界面设计（MIT 许可），以更省电的方式重新实现。' },
         ],
       },
@@ -161,7 +162,7 @@ let side = null;
 let main = null;
 let isOpen = false;
 let groupId = 'lyrics';
-let jumpUntil = 0; // while a jump scrolls, the sidebar keeps the group it was sent to
+let jumpUntil = 0; // while a jump scrolls, the tab bar keeps the group it was sent to
 let swallowTimer = 0;
 const syncs = [];
 const S = () => state.settings || DEFAULTS;
@@ -541,12 +542,12 @@ function build() {
   root.hidden = true;
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-label', '设置');
-  // every group in one scrolling column; the sidebar jumps to one and follows the scroll
+  // every group in one scrolling column; the tab bar above jumps to one and follows the scroll
   side = el('nav', 'bncm-set-side');
   side.setAttribute('aria-label', '设置分类');
   main = el('div', 'bncm-set-main');
   for (const g of GROUPS) {
-    const tab = button('bncm-set-tab', `${ICONS[g.id]}<span>${g.label}</span>`);
+    const tab = button('bncm-set-tab', `${ICONS[g.id]}<span>${g.tab || g.label}</span>`);
     tab.dataset.g = g.id;
     tab.addEventListener('click', () => jumpTo(g.id));
     side.append(tab);
@@ -599,6 +600,8 @@ function markGroup(id) {
     const on = t.dataset.g === id;
     t.classList.toggle('on', on);
     if (on) t.setAttribute('aria-current', 'true'); else t.removeAttribute('aria-current');
+    // a bar too narrow for every tab scrolls the marked one into view
+    if (on && side.scrollWidth > side.clientWidth) t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 }
 
