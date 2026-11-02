@@ -51,12 +51,37 @@ export function placeHost() {
   host.style.setProperty('--bncm-panel-height', `${Math.max(0, top + lyrics.offsetHeight - clear)}px`);
 }
 
+// The switcher's order (tools.js VIEWS): a view further right slides in from the right, the one
+// it replaces out to the left, and the other way round (css/panels.css).
+const ORDER = ['lyrics', 'baike', 'similar', 'comment'];
+const LEAVE_MS = 260;
+
+// Plays a CSS animation class on an element once (again, if it is still on). Taken off when it
+// ends: the rules key on the direction, and a later switch would replay it.
+function replay(el, cls) {
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+  const done = (e) => {
+    if (e.target !== el) return;
+    el.classList.remove(cls);
+    el.removeEventListener('animationend', done);
+    el.removeEventListener('animationcancel', done);
+  };
+  el.addEventListener('animationend', done);
+  el.addEventListener('animationcancel', done);
+}
+
 export async function showView(view) {
   if (view !== 'lyrics' && !MODULES[view]) view = 'lyrics';
   const prev = current;
   current = view;
+  if (prev !== view) document.body.dataset.bncmDir = ORDER.indexOf(view) > ORDER.indexOf(prev) ? 'fwd' : 'back';
   document.body.dataset.bncmView = view;
   if (prev !== 'lyrics' && prev !== view) panels.get(prev)?.def.hide?.();
+  if (view === 'lyrics' && prev !== 'lyrics') {
+    for (const el of document.querySelectorAll('#rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-scrollbar)')) replay(el, 'bncm-view-in');
+  }
   if (view === 'lyrics') { host?.classList.remove('shown'); return; }
   ensureHost();
   placeHost();
@@ -73,7 +98,18 @@ export async function showView(view) {
     p.def.mount(p.el);
     p.mounted = true;
   }
-  for (const [id, q] of panels) q.el?.classList.toggle('active', id === view);
+  // panel to panel: the old one stays a moment, sliding out, while the new one slides in
+  const old = prev !== 'lyrics' && prev !== view ? panels.get(prev)?.el : null;
+  if (old && host.classList.contains('shown')) {
+    old.classList.add('leaving');
+    clearTimeout(old._leave);
+    old._leave = setTimeout(() => old.classList.remove('leaving'), LEAVE_MS);
+    replay(p.el, 'bncm-view-in');
+  }
+  for (const [id, q] of panels) {
+    q.el?.classList.toggle('active', id === view);
+    if (id === view && q.el) { clearTimeout(q.el._leave); q.el.classList.remove('leaving'); }
+  }
   host.classList.add('shown');
   p.def.show(state.track);
 }

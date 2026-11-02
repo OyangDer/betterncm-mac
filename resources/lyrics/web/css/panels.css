@@ -13,18 +13,41 @@
   width: var(--bncm-panel-width); height: var(--bncm-panel-height);
   z-index: 5; /* above the lyric column and the cover side; the top bar and menus stay above */
   opacity: 0; visibility: hidden; pointer-events: none;
-  transform: translateY(12px);
+  /* hidden to the right: the lyrics, the first view, are to its left (switching animation below) */
+  transform: translateX(var(--bncm-slide));
+  transition: opacity .2s ease, transform .26s cubic-bezier(.4, 0, .2, 1), visibility 0s linear .26s;
   font-family: inherit; color: var(--c2);
 }
 .bncm-panel-host.shown {
   opacity: 1; visibility: visible; pointer-events: auto; transform: none;
   transition: opacity .26s ease, transform .34s cubic-bezier(.2, .8, .2, 1);
 }
-/* The lyric column fades out while a panel shows. */
-body:not([data-bncm-view="lyrics"]) #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-scrollbar) {
-  opacity: 0; visibility: hidden; transition: opacity .24s ease, visibility 0s linear .24s;
+/* The lyric column slides out to the left while a panel shows, and back in (index.js bncm-view-in). */
+/* (not before the first switch sets the attribute: a page reloaded while open shows the lyrics) */
+body[data-bncm-view]:not([data-bncm-view="lyrics"]) #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-scrollbar) {
+  opacity: 0; visibility: hidden; transform: translateX(calc(-1 * var(--bncm-slide)));
+  transition: opacity .2s ease, transform .26s cubic-bezier(.4, 0, .2, 1), visibility 0s linear .26s;
 }
-body[data-bncm-view="lyrics"] #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-scrollbar) { transition: opacity .24s ease; }
+body[data-bncm-view="lyrics"] #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-scrollbar) { transition: opacity .26s ease; }
+body[data-bncm-view="lyrics"] #rnp-view .lyric > .bncm-view-in { animation: bncm-view-from-left .34s cubic-bezier(.2, .8, .2, 1); }
+
+/* Switching views (the top-right switcher): the new view slides in from the side it sits on in the
+   switcher, the old one out to the other side. */
+:root { --bncm-slide: 28px; }
+@keyframes bncm-view-from-right { from { opacity: 0; transform: translateX(var(--bncm-slide)); } }
+@keyframes bncm-view-from-left { from { opacity: 0; transform: translateX(calc(-1 * var(--bncm-slide))); } }
+@keyframes bncm-view-to-left { to { opacity: 0; transform: translateX(calc(-1 * var(--bncm-slide))); } }
+@keyframes bncm-view-to-right { to { opacity: 0; transform: translateX(var(--bncm-slide)); } }
+body[data-bncm-dir="fwd"] .bncm-panel.active.bncm-view-in { animation: bncm-view-from-right .34s cubic-bezier(.2, .8, .2, 1); }
+body[data-bncm-dir="back"] .bncm-panel.active.bncm-view-in { animation: bncm-view-from-left .34s cubic-bezier(.2, .8, .2, 1); }
+.bncm-panel.leaving:not(.active) { display: block; pointer-events: none; }
+body[data-bncm-dir="fwd"] .bncm-panel.leaving:not(.active) { animation: bncm-view-to-left .26s cubic-bezier(.4, 0, .2, 1) forwards; }
+body[data-bncm-dir="back"] .bncm-panel.leaving:not(.active) { animation: bncm-view-to-right .26s cubic-bezier(.4, 0, .2, 1) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  :root { --bncm-slide: 0px; }
+  .bncm-panel.bncm-view-in, #rnp-view .lyric > .bncm-view-in { animation: none !important; }
+  .bncm-panel.leaving:not(.active) { display: none; }
+}
 /* While the window is closed the panel waits with the lyric column (app.css, RNPN's entrance). */
 body.bncm-closed .bncm-panel-host.shown { opacity: 0; transition: none; }
 /* The settings popover covers the panel. */
