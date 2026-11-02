@@ -39,6 +39,22 @@ const CSS = `
 .bncm-plugins-head { display: flex; align-items: baseline; gap: 8px; padding: 14px 16px 8px; }
 .bncm-plugins-head b { font-size: 15px; font-weight: 600; }
 .bncm-plugins-head span { color: var(--sub); font-size: 11.5px; }
+/* why the market is hidden: an ⓘ whose note shows on hover */
+.bncm-plugins-info { position: relative; margin-left: auto; align-self: center; display: flex; color: var(--sub); }
+.bncm-plugins-info svg { width: 16px; height: 16px; display: block; }
+.bncm-plugins-info:hover, .bncm-plugins-info:focus-visible { color: rgb(var(--fg)); outline: none; }
+.bncm-plugins-tip {
+  position: absolute; top: calc(100% + 8px); right: -6px; z-index: 1; width: 260px; padding: 10px 12px;
+  border-radius: 10px; background: rgb(var(--bg)); color: rgb(var(--fg)); border: .5px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18); font-size: 12px; line-height: 1.55; font-weight: 400;
+  opacity: 0; visibility: hidden; transform: translateY(-2px); transition: opacity .12s ease, transform .12s ease, visibility 0s .12s;
+  user-select: text; -webkit-user-select: text; cursor: text;
+}
+.bncm-plugins-info:hover .bncm-plugins-tip, .bncm-plugins-info:focus-within .bncm-plugins-tip {
+  opacity: 1; visibility: visible; transform: none; transition: opacity .12s ease, transform .12s ease;
+}
+.bncm-plugins-tip code { font: 11.5px/1.4 ui-monospace, Menlo, monospace; background: rgba(var(--fg), .07); padding: 1px 4px; border-radius: 4px; word-break: break-all; }
+.bncm-plugins-tip code.key { white-space: nowrap; word-break: normal; }
 .bncm-plugins-list { overflow: auto; padding: 0 8px; }
 .bncm-plugins-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; }
 .bncm-plugins-row:hover { background: rgba(var(--fg), .05); }
@@ -154,6 +170,26 @@ function uninstallPart() {
   return foot;
 }
 
+// Most plugins in BetterNCM's market do not run on the Mac, so its manager and market are hidden;
+// the note says how to bring them back (README, 插件).
+function infoTip() {
+  const info = el('span', 'bncm-plugins-info');
+  info.tabIndex = 0;
+  info.setAttribute('role', 'note');
+  info.setAttribute('aria-label', '为什么没有插件市场');
+  info.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6.4"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".8" fill="currentColor" stroke="none"/></svg>';
+  const tip = el('div', 'bncm-plugins-tip');
+  const code = (t) => el('code', null, t);
+  tip.append(
+    '原版 BetterNCM 插件市场里的大部分插件在 Mac 上用不了，所以这里隐藏了插件管理和插件市场。',
+    el('br'), el('br'),
+    '需要的话，在 ', code('~/Library/Application Support/BetterNCM-mac/config.json'),
+    ' 里加上 ', Object.assign(code('"mac.pluginManager": "true"'), { className: 'key' }), '，然后退出网易云再打开。',
+  );
+  info.append(tip);
+  return info;
+}
+
 async function openPanel(btn) {
   if (panel) return;
   changed = false;
@@ -182,6 +218,7 @@ async function openPanel(btn) {
   try {
     const data = await (await api('/internal/plugins')).json();
     version.textContent = `BetterNCM ${data.version}`;
+    if (!data.pluginManager) head.append(infoTip());
     list.textContent = '';
     if (!data.plugins.length) list.append(el('div', 'bncm-plugins-empty', '还没有安装插件。'));
     for (const p of data.plugins) list.append(row(p));

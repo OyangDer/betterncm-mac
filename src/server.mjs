@@ -14,7 +14,7 @@ import * as fsapi from './fsapi.mjs';
 
 // The lyrics window's row in the plugin panel (not a plugin: config mac.lyricsWindow).
 const LYRICS_WINDOW_SLUG = '@lyrics-window';
-import { extractPackedPlugins, collectHijacks, listInstalledPlugins, setPluginEnabled } from './plugins.mjs';
+import { extractPackedPlugins, collectHijacks, listInstalledPlugins, pluginManagerEnabled, setPluginEnabled } from './plugins.mjs';
 import * as macos from './macos.mjs';
 
 const ORPHEUS_ORIGIN = 'orpheus://orpheus';
@@ -498,6 +498,7 @@ export async function startServer({ apiKey, hooks = {} }) {
       const rnpn = installed.some((p) => p.name === 'RefinedNowPlayingNext');
       sendJson(res, {
         version: MAC_VERSION,
+        pluginManager: pluginManagerEnabled(),
         plugins: [
           { slug: LYRICS_WINDOW_SLUG, name: '歌词窗口', version: '', author: '', builtin: true, dev: false,
             description: `BetterNCM 自带的歌词页，关掉后改用${rnpn ? ' RefinedNowPlayingNext' : '网易云原版的播放页'}`,
