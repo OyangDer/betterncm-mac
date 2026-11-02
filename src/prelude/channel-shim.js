@@ -203,6 +203,7 @@ function __bncmInstallChannelShim() {
       try { t(command, args); } catch (e) { console.error('[BetterNCM] channel tap failed', e); }
     }
     if (command === PROGRESS) {
+      healPlayState(args);
       dispatchProgress(args);
       return;
     }
@@ -278,22 +279,53 @@ function __bncmInstallChannelShim() {
     }, 1500);
   }
 
+  // NCM's play button follows its store, which can say paused while native plays (seen after
+  // reloads of the page and resumes NCM's page did not ask for: the store keeps what it had). When the position keeps advancing for a second and more while the store says paused,
+  // tell the store it is playing, with the action NCM's own audio listener uses (playing/onUpdate;
+  // 2 is its Playing). A real pause stops the position at once, so it is never undone.
+  const PLAYING = 2;
+  const HEAL_AFTER_MS = 1200;
+  let healFrom = null; // { id, pos, at } of the last check, when the store said paused
+  let healNext = 0; // the store is read at most once per HEAL_AFTER_MS
+  function healPlayState(args) {
+    const now = performance.now();
+    if (now < healNext) return;
+    healNext = now + HEAL_AFTER_MS;
+    const id = String(args[0]);
+    const pos = parseFloat(args[1]);
+    const store = playingStore();
+    if (!Number.isFinite(pos) || !store || store.getState().playing?.playingState === PLAYING) { healFrom = null; return; }
+    const prev = healFrom;
+    healFrom = { id, pos, at: now };
+    // paused at both checks, and played on in between (at least 80% of the time that passed)
+    if (!prev || prev.id !== id || pos - prev.pos < ((now - prev.at) / 1000) * 0.8) return;
+    healFrom = null;
+    try {
+      console.debug('[BetterNCM] channel shim: NCM\'s store said paused while playing; set it to playing');
+      store.dispatch({ type: 'playing/onUpdate', payload: { playingState: PLAYING } });
+    } catch (e) {
+      console.error('[BetterNCM] could not set the play state', e);
+    }
+  }
+
   // On Windows, native fires audioplayer.onLoad for the restored track after plugins have
   // registered; on macOS it fires before plugins load, so a plugin that fetches per-track data
   // on onLoad (RefinedNowPlaying's lyrics) never sees the track that is already loaded. Replay
   // one onLoad to such late listeners once the player store knows the current track.
-  function currentTrackId() {
+  function playingStore() {
     try {
       let f = document.getElementById('root')._reactRootContainer._internalRoot.current;
       for (let i = 0; f && i < 50; i++, f = f.child) {
         const store = f.memoizedProps && f.memoizedProps.store;
-        if (store) {
-          const p = store.getState().playing;
-          return p && p.resourceTrackId ? String(p.resourceTrackId) : '';
-        }
+        if (store) return store;
       }
     } catch { /* store not mounted yet */ }
-    return '';
+    return null;
+  }
+
+  function currentTrackId() {
+    const p = playingStore()?.getState().playing;
+    return p && p.resourceTrackId ? String(p.resourceTrackId) : '';
   }
 
   function replayLoadTo(cb) {
