@@ -55,6 +55,21 @@ function restartDock(domain) {
   try { sh('/usr/bin/killall', ['Dock']); } catch { /* the Dock picks it up on its next start */ }
 }
 
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+// Imports the edited copy and restarts the Dock, then checks the change held: a Dock that is busy
+// saving its own state (an app was just launched, as NCM is on uninstall) writes its old tile list
+// back over ours, so it is imported again, up to three times.
+function importAndRestart(domain, file, held) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    sh('/usr/bin/defaults', ['import', domain, file]);
+    restartDock(domain);
+    if (domain !== DOCK) return;
+    sleep(1500);
+    if (withExport(domain, (now) => held(tileUrls(now)))) return;
+  }
+}
+
 const xmlEscape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // Adds the app at the end of the Dock's app section. -> false when it was already there.
@@ -86,8 +101,7 @@ export function replaceInDock(old, app, { domain = DOCK } = {}) {
     for (const i of urls.map((u, j) => (u === to && j !== at ? j : -1)).filter((j) => j >= 0).reverse()) {
       sh('/usr/bin/plutil', ['-remove', `persistent-apps.${i}`, file]);
     }
-    sh('/usr/bin/defaults', ['import', domain, file]);
-    restartDock(domain);
+    importAndRestart(domain, file, (now) => now.includes(to) && !now.includes(from));
     return true;
   });
 }
@@ -100,8 +114,7 @@ export function unpinFromDock(app, { domain = DOCK } = {}) {
     const hits = urls.map((u, i) => (u === url ? i : -1)).filter((i) => i >= 0).reverse();
     if (!hits.length) return false;
     for (const i of hits) sh('/usr/bin/plutil', ['-remove', `persistent-apps.${i}`, file]);
-    sh('/usr/bin/defaults', ['import', domain, file]);
-    restartDock(domain);
+    importAndRestart(domain, file, (now) => !now.includes(url));
     return true;
   });
 }
