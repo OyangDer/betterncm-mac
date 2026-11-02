@@ -33,6 +33,8 @@ curl -fsSL https://registry.npmmirror.com/betterncm-mac/latest | sed -n 's/.*"ta
 curl -fsSL https://raw.githubusercontent.com/OyangDer/betterncm-mac/main/install.sh | bash
 ```
 
+不想碰终端：从 [Releases](https://github.com/OyangDer/betterncm-mac/releases/latest) 下载 `BetterNCM-Installer.zip`，解压后双击里面的“安装 BetterNCM.command”。它做的事和上面那行命令一样（文件在 [installer/](installer/)，npm 包里也有一份）。第一次打开时 macOS 可能提示“无法打开，因为来自身份不明的开发者”：右键点它，选“打开”；或者到“系统设置 → 隐私与安全性”里点“仍要打开”。
+
 它会下载 BetterNCM 和它要用的 Node.js（自带，不影响电脑上原有的东西），装到“应用程序”里，放进 Dock（换掉 Dock 里原来的网易云图标），再装一个后台小助手，然后带着插件打开网易云。整个过程一般不到一分钟。两样都优先从国内镜像下载，并核对校验值；镜像连不上时改从 npm 官方或 GitHub 下载。装好的 BetterNCM 用网易云的图标，在中文系统里叫“网易云音乐 BetterNCM”，在英文系统里叫“NetEaseMusic BetterNCM”，聚焦搜索里输入“网易云”或“BetterNCM”就能找到。
 
 以后**点 Dock 里的网易云图标**就行：那是 BetterNCM（用的是网易云的图标），直接带着插件打开网易云。网易云启动时必须带调试端口插件才加载得进去，而网易云自己的图标不带。
