@@ -12,7 +12,7 @@ export const DEFAULTS = Object.freeze({
   karaoke: true,
   contributors: 'hide', // show | hover | hide
   // 歌词 · 大小
-  fontSize: 54, // RNPN's lyric-font-size: px for a window as large as the screen, scaled down with it
+  fontSize: 48, // RNPN's lyric-font-size: px for a window as large as the screen, scaled down with it
   translationEm: 0.65, // 0: automatic, min(1em, 0.62em + 6px)
   translationWeight: 'semibold', // regular | medium | semibold; RNPN drew translations regular
   romajiEm: 0.6,
@@ -29,14 +29,14 @@ export const DEFAULTS = Object.freeze({
   // 歌词 · 时间
   offset: 0, // ms, positive shows lyrics earlier
   // 外观
-  scheme: 'auto', // auto | dark | light
+  scheme: 'dark', // auto | dark (white text) | light (black text)
   accent: 'off', // off | primary | secondary | tertiary
   textEffect: 'none', // none | shadow | glow
   showControls: true,
   // 背景
   bgType: 'blur', // blur | gradient | solid
-  bgBlur: 90,
-  bgDim: 55,
+  bgBlur: 110,
+  bgDim: 19,
   gradientDynamic: true,
   gradientDim: 45,
   // 封面与信息
