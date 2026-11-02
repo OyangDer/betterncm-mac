@@ -16,7 +16,8 @@
   right: 14px;
   z-index: 1000; /* above #rnp-view (998) */
   width: min(488px, calc(100vw - 28px));
-  max-height: min(600px, calc(100vh - 70px));
+  /* one size whatever is shown: the groups scroll inside it */
+  height: min(600px, calc(100vh - 70px));
   display: flex;
   box-sizing: border-box;
   background: rgba(var(--bg), .5);
@@ -87,8 +88,7 @@
 }
 .bncm-set-main::-webkit-scrollbar { width: 9px; }
 .bncm-set-main::-webkit-scrollbar-thumb { background: rgba(var(--fg), .16); border-radius: 9px; border: 3px solid transparent; background-clip: padding-box; }
-.bncm-set-page { display: none; }
-.bncm-set-page.on { display: block; }
+.bncm-set-page + .bncm-set-page { margin-top: 26px; padding-top: 8px; border-top: .5px solid var(--line); }
 .bncm-set-title { font-size: 17px; font-weight: 600; margin: 8px 4px 2px; color: var(--t1); letter-spacing: .01em; }
 .bncm-set-section { margin-top: 14px; }
 .bncm-set-head { font-size: 11.5px; font-weight: 500; color: var(--t3); margin: 0 4px 6px; }

@@ -161,6 +161,7 @@ let side = null;
 let main = null;
 let isOpen = false;
 let groupId = 'lyrics';
+let jumpUntil = 0; // while a jump scrolls, the sidebar keeps the group it was sent to
 let swallowTimer = 0;
 const syncs = [];
 const S = () => state.settings || DEFAULTS;
@@ -540,19 +541,19 @@ function build() {
   root.hidden = true;
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-label', '设置');
+  // every group in one scrolling column; the sidebar jumps to one and follows the scroll
   side = el('nav', 'bncm-set-side');
-  side.setAttribute('role', 'tablist');
+  side.setAttribute('aria-label', '设置分类');
   main = el('div', 'bncm-set-main');
   for (const g of GROUPS) {
     const tab = button('bncm-set-tab', `${ICONS[g.id]}<span>${g.label}</span>`);
     tab.dataset.g = g.id;
-    tab.setAttribute('role', 'tab');
-    tab.addEventListener('click', () => showGroup(g.id));
+    tab.addEventListener('click', () => jumpTo(g.id));
     side.append(tab);
 
     const page = el('section', 'bncm-set-page');
     page.dataset.g = g.id;
-    page.setAttribute('role', 'tabpanel');
+    page.setAttribute('aria-label', g.label);
     page.append(el('h2', 'bncm-set-title', g.label));
     for (const sec of g.sections) {
       const wrap = el('div', 'bncm-set-section');
@@ -579,7 +580,8 @@ function build() {
     else if (e.key === ' ' && e.target instanceof Element && e.target.closest('button, input')) e.stopPropagation();
   });
   document.body.append(root);
-  showGroup(groupId);
+  main.addEventListener('scroll', () => { if (performance.now() > jumpUntil) markGroup(groupAtScroll()); }, { passive: true });
+  markGroup(groupId);
   watch('settings', (s) => { if (isOpen) sync(s); });
   // the switches' 当前歌曲没有… follow the track
   watch('lyrics', () => { if (isOpen) sync(); });
@@ -591,15 +593,36 @@ function sync(s = S()) {
   }
 }
 
-function showGroup(id) {
+function markGroup(id) {
   groupId = id;
   for (const t of side.children) {
     const on = t.dataset.g === id;
     t.classList.toggle('on', on);
-    t.setAttribute('aria-selected', String(on));
+    if (on) t.setAttribute('aria-current', 'true'); else t.removeAttribute('aria-current');
   }
-  for (const p of main.children) p.classList.toggle('on', p.dataset.g === id);
-  main.scrollTop = 0;
+}
+
+// A group's top in the column's scroll coordinates.
+function pageTop(page) {
+  return page.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop;
+}
+
+/** The group filling the column's upper third; at the very bottom, the last one (it may be too short to reach the top). */
+function groupAtScroll() {
+  const pages = [...main.children];
+  if (main.scrollTop + main.clientHeight >= main.scrollHeight - 2) return pages.at(-1).dataset.g;
+  let id = pages[0].dataset.g;
+  for (const p of pages) if (pageTop(p) <= main.scrollTop + main.clientHeight / 3) id = p.dataset.g;
+  return id;
+}
+
+function jumpTo(id) {
+  const page = [...main.children].find((p) => p.dataset.g === id);
+  if (!page) return;
+  markGroup(id);
+  const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  jumpUntil = smooth ? performance.now() + 700 : 0;
+  main.scrollTo({ top: page === main.firstElementChild ? 0 : pageTop(page) - 6, behavior: smooth ? 'smooth' : 'auto' });
 }
 
 function onOutside(e) {
