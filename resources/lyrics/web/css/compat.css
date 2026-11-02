@@ -203,3 +203,38 @@ body.rnp-lyric-page-open #root .ad-tutorial-step-0-stop > [class*="scrollCss_"] 
 #bncm-rnp-views button:hover { background: rgba(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255), 0.1); }
 #bncm-rnp-views button:hover svg { opacity: 1; }
 #bncm-rnp-views button[hidden] { display: none; }
+/* In the playback controls (tools.js placeSwitcher), in RNPN's playlist button's place: always
+   shown like the other controls, and its capsule drawn behind the buttons without taking room in
+   the row, opening rightward from the current view (or upward, bncm-views-up). */
+#rnp-view .am-music-controls .rnp-amll-playlist[hidden] { display: none !important; }
+#bncm-rnp-views.bncm-views-bottom {
+  order: 0; width: 28px; height: 28px; align-self: center; z-index: 3;
+  background: none !important; box-shadow: none !important; opacity: 1 !important; pointer-events: auto !important;
+}
+#bncm-rnp-views.bncm-views-bottom::before {
+  content: ""; position: absolute; left: -3px; top: -3px; width: 34px; height: 34px; border-radius: 17px;
+  background: transparent; pointer-events: none;
+  transition: width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease;
+}
+#bncm-rnp-views.bncm-views-bottom.bncm-views-up::before { top: auto; bottom: -3px; }
+#bncm-rnp-views.bncm-views-bottom.bncm-open::before {
+  width: calc(var(--bncm-views-open-width, 28px) + 6px);
+  background: rgba(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255), 0.1);
+}
+#bncm-rnp-views.bncm-views-bottom.bncm-views-up.bncm-open::before { width: 34px; height: calc(var(--bncm-views-open-width, 28px) + 6px); }
+#bncm-rnp-views.bncm-views-bottom button { left: 0; right: auto; }
+#bncm-rnp-views.bncm-views-bottom button svg { width: 22px; height: 22px; }
+#bncm-rnp-views.bncm-views-bottom button[aria-pressed="true"] svg { opacity: 0.85; }
+#bncm-rnp-views.bncm-views-bottom.bncm-open button { transform: translateX(calc(var(--slot) * 32px)); }
+#bncm-rnp-views.bncm-views-bottom.bncm-views-up.bncm-open button { transform: translateY(calc(var(--slot) * -32px)); }
+
+/* The playback mode's name over its button for a moment after a click (side.js showModeTip). */
+#rnp-view .am-music-controls { position: relative; }
+.bncm-mode-tip {
+  position: absolute; bottom: calc(100% + 6px); transform: translate(-50%, 4px);
+  padding: 4px 10px; border-radius: 12px; white-space: nowrap; pointer-events: none;
+  font-size: 12px; line-height: 16px; color: rgb(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255));
+  background: rgba(var(--rnp-accent-color-shade-2-rgb, 255, 255, 255), 0.14);
+  opacity: 0; transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.bncm-mode-tip.shown { opacity: 1; transform: translate(-50%, 0); }

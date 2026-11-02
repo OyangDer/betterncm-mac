@@ -1,0 +1,33 @@
+/* 播放列表 (js/panels/playlist.js): NCM's play queue in the lyric column's place. */
+.bncm-pl { display: flex; flex-direction: column; height: 100%; }
+.bncm-pl-head { display: flex; align-items: baseline; gap: 10px; padding: 4px 12px 12px; flex: none; }
+.bncm-pl-head .bncm-card-title { font-size: 20px; line-height: 28px; font-weight: 600; color: var(--c1); }
+.bncm-pl-count { font-size: 13px; color: var(--c6); }
+.bncm-pl-list { flex: 1; min-height: 0; padding-bottom: 40px; }
+.bncm-pl-row {
+  display: flex; align-items: center; gap: 12px; padding: 7px 12px; border-radius: 10px; flex: none;
+  cursor: default; transition: background-color .15s ease;
+}
+.bncm-pl-row:hover { background: var(--c11); }
+.bncm-pl-row.current { background: rgba(var(--fg), .12); }
+.bncm-pl-cover { position: relative; flex: none; width: 40px; height: 40px; border-radius: 6px; overflow: hidden; background: var(--c11); }
+.bncm-pl-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* the number over the cover only while it is hovered; the playing song gets the bars */
+.bncm-pl-index {
+  position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: #fff;
+  background: rgba(0, 0, 0, .35); opacity: 0; transition: opacity .15s ease; font-variant-numeric: tabular-nums;
+}
+.bncm-pl-row:hover .bncm-pl-index { opacity: 1; }
+.bncm-pl-row.current .bncm-pl-index { opacity: 1; font-size: 0; }
+.bncm-pl-row.current .bncm-pl-index::before {
+  content: ""; width: 14px; height: 12px;
+  background: linear-gradient(#fff, #fff) 0 100% / 3px 60% no-repeat, linear-gradient(#fff, #fff) 50% 100% / 3px 100% no-repeat,
+    linear-gradient(#fff, #fff) 100% 100% / 3px 40% no-repeat;
+}
+.bncm-pl-text { flex: 1; min-width: 0; }
+.bncm-pl-name, .bncm-pl-artists { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bncm-pl-name { font-size: 14px; line-height: 20px; color: var(--c2); }
+.bncm-pl-row.current .bncm-pl-name { color: var(--c1); font-family: var(--bncm-font-semibold); }
+.bncm-pl-artists { font-size: 12px; line-height: 17px; color: var(--c6); }
+.bncm-pl-time { flex: none; font-size: 12px; color: var(--c7); font-variant-numeric: tabular-nums; }
+.bncm-pl-more { text-align: center; font-size: 12px; color: var(--c7); padding: 12px 0; }

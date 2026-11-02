@@ -47,7 +47,7 @@ export function mountSide({ collapse }) {
   els.prev.addEventListener('click', () => send('prev'));
   els.next.addEventListener('click', () => send('next'));
   els.play.addEventListener('click', () => send('toggle'));
-  els.mode.addEventListener('click', () => send('mode'));
+  els.mode.addEventListener('click', () => { modeAsked = performance.now(); send('mode'); });
   els.playlist.addEventListener('click', () => { send('playlist'); collapse(); });
   els.more.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -399,14 +399,35 @@ function renderLiked(v) {
 }
 
 const MODE = {
-  order: ['modeOrder', 'Order'], repeat: ['modeRepeat', 'Repeat'], ai: ['modeAi', 'Heartbeat'],
-  random: ['modeRandom', 'Shuffle'], one: ['modeOne', 'Repeat One'],
+  order: ['modeOrder', 'Order', '顺序播放'], repeat: ['modeRepeat', 'Repeat', '列表循环'], ai: ['modeAi', 'Heartbeat', '心动模式'],
+  random: ['modeRandom', 'Shuffle', '随机播放'], one: ['modeOne', 'Repeat One', '单曲循环'],
 };
-function renderMode(m) {
-  const [icon, label] = MODE[m] || MODE.one;
+const MODE_TIP_MS = 1200;
+let modeAsked = -Infinity; // when the mode button was clicked: only that change gets the tip
+let modeTip = null;
+let modeTipTimer = 0;
+function renderMode(m, old) {
+  const [icon, label, zh] = MODE[m] || MODE.one;
   els.mode.innerHTML = ICONS[icon];
-  els.mode.title = label;
+  els.mode.title = zh;
   els.mode.setAttribute('aria-label', `Playback mode: ${label}`);
+  if (old !== undefined && m !== old && performance.now() - modeAsked < 3000) showModeTip(zh);
+}
+
+// The new mode's name over the button for a moment: the icons alone are easy to mix up.
+function showModeTip(text) {
+  if (!modeTip) {
+    modeTip = document.createElement('div');
+    modeTip.className = 'bncm-mode-tip';
+    els.mode.parentElement.append(modeTip);
+  }
+  modeTip.textContent = text;
+  const b = els.mode.getBoundingClientRect();
+  const p = els.mode.parentElement.getBoundingClientRect();
+  modeTip.style.left = `${b.left - p.left + b.width / 2}px`;
+  modeTip.classList.add('shown');
+  clearTimeout(modeTipTimer);
+  modeTipTimer = setTimeout(() => modeTip.classList.remove('shown'), MODE_TIP_MS);
 }
 
 function addDislike(collapse) {

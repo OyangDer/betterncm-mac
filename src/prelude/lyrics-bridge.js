@@ -254,7 +254,7 @@ function installLyricsBridge() {
   const remember = (key, value) => { last[key] = JSON.stringify(value); };
 
   let slices = {};
-  const slicesOf = (s) => ({ p: s.playing, host: s['async:hostResource'], app: s.app });
+  const slicesOf = (s) => ({ p: s.playing, host: s['async:hostResource'], app: s.app, list: s.playingList?.curPlayingList });
   let iconTries = 0;
   function checkAll() {
     if (!active) return;
@@ -262,7 +262,10 @@ function installLyricsBridge() {
     const p = s.playing || {};
     const needIcon = readRoaming(p) && !dislikeIcon;
     // only when a slice that matters changed (the store notifies for every dispatch)
-    if (!needIcon && slices.p === s.playing && slices.host === s['async:hostResource'] && slices.app === s.app) return;
+    if (!needIcon && slices.p === s.playing && slices.host === s['async:hostResource'] && slices.app === s.app
+      && slices.list === s.playingList?.curPlayingList) return;
+    // the playlist panel reads the queue again (the list is a new array whenever NCM changes it)
+    if (slices.list !== s.playingList?.curPlayingList) post({ t: 'queueChanged' });
     slices = slicesOf(s);
     const tr = readTrack();
     sendIfChanged('track', tr, { t: 'track', ...tr });
@@ -667,6 +670,37 @@ function installLyricsBridge() {
     post({ t: 'hello' });
   }
 
+  // --- the queue (the window's 播放列表 panel) ---------------------------------------------------
+  const QUEUE_MAX = 2000;
+  // NCM's current play queue, as its own drawer lists it, and the item playing.
+  function readQueue() {
+    const s = state();
+    const list = s.playingList?.curPlayingList || [];
+    const items = [];
+    for (const x of list.slice(0, QUEUE_MAX)) {
+      const t = x.track || x.voice || x.localTrack || {};
+      items.push({
+        id: str(x.id),
+        name: str(first(t.name, x.text)),
+        artists: (t.artists || t.ar || []).map((a) => str(a?.name)).filter(Boolean).join(' / ') || str(t.radio?.name || t.album?.artist?.name),
+        album: str(t.album?.name || t.al?.name),
+        cover: str(t.album?.picUrl || t.al?.picUrl || t.coverUrl),
+        duration: Number(t.duration || t.dt) || 0,
+      });
+    }
+    // in 心动模式 the playing entry can come without an id of its own
+    const cur = s.playing?.curPlaying;
+    return { items, current: str(first(cur?.id, cur?.track?.id, s.playing?.resourceTrackId)), total: list.length };
+  }
+  // Plays one item of the queue, as a double click in NCM's drawer does; the queue stays as it is.
+  function playQueueItem(id) {
+    const item = (state().playingList?.curPlayingList || []).find((x) => str(x.id) === id);
+    if (!item) return false;
+    const resourceType = item.track ? 'track' : item.voice ? 'voice' : 'track';
+    dispatch({ type: 'async:action/doAction', payload: { actionId: 'play', data: { resource: item, resourceType } } });
+    return true;
+  }
+
   const reply = (m, ok, v) => post(ok ? { t: 'reply', rid: m.rid, ok: true, data: v } : { t: 'reply', rid: m.rid, ok: false, error: String(v?.message || v) });
 
   const commands = {
@@ -696,6 +730,8 @@ function installLyricsBridge() {
     like: () => { dispatch({ type: 'async:hostResource/setLikeCurPlayingTrack', payload: { from: 'miniBar' } }); return true; },
     mode: () => nextMode(),
     playlist: () => openPlaylist(),
+    queue: (m) => { try { reply(m, true, readQueue()); } catch (e) { reply(m, false, e); } return true; },
+    playItem: (m) => playQueueItem(String(m.id ?? '')),
     dislike: () => dislike(),
     nav: (m) => navigate(m.hash),
     fetch: async (m) => {

@@ -1,4 +1,4 @@
-// 百科 / 相似推荐 / 评论: views that take the lyric column's place (compat-rnp-panels.js put NCM's own
+// 百科 / 相似推荐 / 评论 / 播放列表: views that take the lyric column's place (compat-rnp-panels.js put NCM's own
 // pages there; here they are rebuilt from the same data). Each panel module registers itself:
 //   registerPanel(id, { mount(el), show(track), hide() })
 // mount runs once with the panel's own container; show runs whenever the panel is shown or the track
@@ -18,7 +18,7 @@ export function loadCss(href) {
 }
 let host = null; // the panel area over the lyric column
 let current = 'lyrics';
-const MODULES = { baike: './baike.js', similar: './similar.js', comment: './comment.js' };
+const MODULES = { baike: './baike.js', similar: './similar.js', comment: './comment.js', playlist: './playlist.js' };
 
 export function registerPanel(id, def) {
   panels.set(id, { def, el: null, mounted: false });
@@ -53,7 +53,7 @@ export function placeHost() {
 
 // The switcher's order (tools.js VIEWS): a view further right slides in from the right, the one
 // it replaces out to the left, and the other way round (css/panels.css).
-const ORDER = ['lyrics', 'baike', 'similar', 'comment'];
+const ORDER = ['lyrics', 'baike', 'similar', 'comment', 'playlist'];
 const LEAVE_MS = 260;
 
 // Plays a CSS animation class on an element once (again, if it is still on). Taken off when it
