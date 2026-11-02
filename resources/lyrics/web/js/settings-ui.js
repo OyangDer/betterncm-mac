@@ -4,6 +4,7 @@
 // Built on first open, display:none while closed.
 import { state, watch } from './state.js';
 import { DEFAULTS, update, reset } from './settings.js';
+import { flags } from './parse.js';
 
 const BNCM_VERSION = '1.3.4'; // the BetterNCM API the injector provides (src/config.mjs BNCM_VERSION)
 const RNPN_VERSION = '3.0.2';
@@ -23,16 +24,24 @@ const SEG = (pairs) => pairs.map(([v, l]) => ({ v, l }));
 const pct = (v) => `${Math.round(v * 100)}%`;
 
 // Rows: switch | seg | slider | stepper | fonts | note | info | reset. `when` hides a row that does
-// not apply; `stack` puts a wide control under its label.
+// not apply; `stack` puts a wide control under its label. A switch's `avail` names the lyric flag
+// (parse.js) it needs: without it the row says the current song has none. A switch with `get` and
+// `set` shows a state that is not a setting (copy mode).
+const copyModeOn = () => document.body.classList.contains('bncm-copy-mode');
 const GROUPS = [
   {
     id: 'lyrics', label: '歌词', sections: [
       {
         title: '显示', rows: [
-          { type: 'switch', k: 'showTranslation', label: '翻译' },
-          { type: 'switch', k: 'showRomaji', label: '罗马音' },
-          { type: 'switch', k: 'karaoke', label: '逐字歌词', help: '有逐字时间轴的歌词按字高亮' },
+          { type: 'switch', k: 'showTranslation', label: '翻译', avail: 'hasTranslation', missing: '当前歌曲没有翻译' },
+          { type: 'switch', k: 'showRomaji', label: '罗马音', avail: 'hasRomaji', missing: '当前歌曲没有罗马音' },
+          { type: 'switch', k: 'karaoke', label: '逐字歌词', help: '有逐字时间轴的歌词按字高亮', avail: 'hasKaraoke', missing: '当前歌曲没有逐字时间轴' },
           { type: 'seg', k: 'contributors', label: '歌词贡献者', options: SEG([['show', '总是'], ['hover', '悬停时'], ['hide', '隐藏']]) },
+          {
+            type: 'switch', label: '复制模式', help: '整首歌词变成可选中复制的文字，Esc 退出',
+            get: copyModeOn,
+            set: async (v) => (await import('./copy-mode.js')).toggleCopyMode(v),
+          },
         ],
       },
       {
@@ -181,15 +190,30 @@ function rowShell(r) {
 }
 
 function switchRow(r) {
-  const { row } = rowShell(r);
+  const { row, text } = rowShell(r);
+  if (r.avail) {
+    // in place of the help line while the current song lacks it; no lyrics yet: nothing to say
+    const help = text.querySelector('.bncm-set-help');
+    const missing = el('div', 'bncm-set-help bncm-set-missing', r.missing);
+    text.append(missing);
+    syncs.push(() => {
+      const none = !!state.lyrics && !flags(state.lyrics)[r.avail];
+      missing.hidden = !none;
+      if (help) help.hidden = none;
+    });
+  }
   const sw = button('bncm-set-switch');
   sw.setAttribute('role', 'switch');
   sw.setAttribute('aria-label', r.label);
   sw.append(el('i'));
   row.append(sw);
+  const get = r.get || ((s) => s[r.k]);
+  const paint = (s = S()) => sw.setAttribute('aria-checked', String(!!get(s)));
   // the whole row toggles, like a macOS settings row
-  row.addEventListener('click', () => update({ [r.k]: !S()[r.k] }));
-  syncs.push((s) => sw.setAttribute('aria-checked', String(!!s[r.k])));
+  row.addEventListener('click', async () => {
+    if (r.set) { await r.set(!get(S())); paint(); } else update({ [r.k]: !S()[r.k] });
+  });
+  syncs.push(paint);
   return row;
 }
 
@@ -557,6 +581,8 @@ function build() {
   document.body.append(root);
   showGroup(groupId);
   watch('settings', (s) => { if (isOpen) sync(s); });
+  // the switches' 当前歌曲没有… follow the track
+  watch('lyrics', () => { if (isOpen) sync(); });
 }
 
 function sync(s = S()) {

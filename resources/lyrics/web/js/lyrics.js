@@ -5,7 +5,6 @@ import { send } from './bus.js';
 import { now, onClock, seeks } from './clock.js';
 import { flags } from './parse.js';
 import { state, watch } from './state.js';
-import { update as updateSettings } from './settings.js';
 
 const STAGGER_LEAD = 200; // lines start moving this long before their time (lyric-stagger)
 const RETURN_MS = 2500; // after the last wheel event, back to the current line
@@ -13,7 +12,6 @@ const CJK = /[\p{Unified_Ideograph}぀-ゟ゠-ヿ]/u;
 
 let box; // .rnp-lyrics
 let col; // the lyric column
-let switchCol;
 let scrollbar;
 let thumb;
 let lines = []; // [{el, line, words: [{el, glow, ...}], dots}]
@@ -39,18 +37,7 @@ export function mountLyrics(column) {
   box.className = 'rnp-lyrics';
   col.append(box);
 
-  switchCol = document.createElement('div');
-  switchCol.className = 'rnp-lyrics-switch';
-  switchCol.innerHTML = `<div class="rnp-lyrics-switch-btn-divider"></div>
-    <button type="button" class="rnp-lyrics-switch-btn" data-k="showTranslation" title="翻译">译</button>
-    <button type="button" class="rnp-lyrics-switch-btn" data-k="showRomaji" title="罗马音">音</button>
-    <button type="button" class="rnp-lyrics-switch-btn" data-k="karaoke" title="逐字歌词">逐字</button>`;
-  switchCol.addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-k]');
-    if (!b || b.classList.contains('unavailable')) return;
-    updateSettings({ [b.dataset.k]: !S()[b.dataset.k] });
-  });
-  col.append(switchCol);
+  // 翻译 / 罗马音 / 逐字, RNPN's switches at the column's bottom right, are in 设置 › 歌词
 
   scrollbar = document.createElement('div');
   scrollbar.className = 'rnp-lyrics-scrollbar';
@@ -106,19 +93,6 @@ function applySettingClasses() {
   document.body.style.setProperty('--lyric-romaji-size-em', `${s.romajiEm ?? 0.6}em`);
   if (s.translationEm) document.body.style.setProperty('--lyric-translation-size-em', `${s.translationEm}em`);
   else document.body.style.removeProperty('--lyric-translation-size-em');
-  updateSwitch();
-}
-
-function updateSwitch() {
-  if (!switchCol) return;
-  const f = model?.flags || {};
-  const s = S();
-  for (const b of switchCol.querySelectorAll('button[data-k]')) {
-    const k = b.dataset.k;
-    const avail = k === 'showTranslation' ? f.hasTranslation : k === 'showRomaji' ? f.hasRomaji : f.hasKaraoke;
-    b.classList.toggle('unavailable', !avail);
-    b.classList.toggle('active', !!s[k] && !!avail);
-  }
 }
 
 // --- font size: RNPN's setting is for a full-screen window, scaled down with the window ----------
@@ -143,7 +117,6 @@ function build(lyr) {
   box.classList.remove('scrolling');
   model = lyr ? { ...lyr, flags: flags(lyr) } : null;
   box.classList.toggle('pure-music', !!model?.flags.pureMusic);
-  updateSwitch();
   if (!model?.lyrics?.length) { box.classList.add('empty'); return; }
   box.classList.remove('empty');
   fontPx = computeFontPx();

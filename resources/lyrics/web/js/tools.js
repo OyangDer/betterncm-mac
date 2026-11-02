@@ -1,5 +1,5 @@
 // The top-right tool row: the views switcher (歌词 / 百科 / 相似推荐 / 评论, from
-// compat-rnp-panels.js), settings, copy mode and the collapse chevron, in RNPN's row.
+// compat-rnp-panels.js), settings and the collapse chevron, in RNPN's row. Copy mode is in 设置.
 import { host } from './bus.js';
 import { state, set, watch } from './state.js';
 
@@ -39,12 +39,6 @@ export function mountTools({ collapse }) {
     settingsBtn.classList.toggle('bncm-on', !!open);
   });
   document.addEventListener('bncm-settings-closed', () => settingsBtn?.classList.remove('bncm-on'));
-  const copyBtn = tools.querySelector('.bncm-top-copy');
-  copyBtn?.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const on = await lazy('./copy-mode.js', 'toggleCopyMode');
-    copyBtn.classList.toggle('bncm-on', !!on);
-  });
 
   switcher = tools.querySelector('#bncm-rnp-views');
   for (const v of VIEWS) {

@@ -21,10 +21,10 @@
   transition: opacity .26s ease, transform .34s cubic-bezier(.2, .8, .2, 1);
 }
 /* The lyric column fades out while a panel shows. */
-body:not([data-bncm-view="lyrics"]) #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-switch, .rnp-lyrics-scrollbar) {
+body:not([data-bncm-view="lyrics"]) #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-scrollbar) {
   opacity: 0; visibility: hidden; transition: opacity .24s ease, visibility 0s linear .24s;
 }
-body[data-bncm-view="lyrics"] #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-switch, .rnp-lyrics-scrollbar) { transition: opacity .24s ease; }
+body[data-bncm-view="lyrics"] #rnp-view .lyric > :is(.rnp-lyrics, .rnp-lyrics-scrollbar) { transition: opacity .24s ease; }
 /* While the window is closed the panel waits with the lyric column (app.css, RNPN's entrance). */
 body.bncm-closed .bncm-panel-host.shown { opacity: 0; transition: none; }
 /* The settings popover covers the panel. */

@@ -94,35 +94,6 @@ body:not(.bncm-vol-stock) #rnp-view .am-music-volume-controls .rnp-amll-volume-s
   display: none;
 }
 
-#rnp-view .rnp-lyrics-switch {
-  width: 28px;
-  right: -36px;
-  align-items: center;
-}
-#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn {
-  box-sizing: border-box;
-  writing-mode: horizontal-tb;
-  width: auto;
-  min-width: 28px;
-  height: 28px;
-  margin-top: 4px;
-  padding: 0 8px;
-  border-radius: 14px;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  line-height: 1;
-  background-color: transparent;
-  color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.62);
-}
-#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn svg { fill: currentColor; }
-#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn:hover { background-color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.1); color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.96); }
-#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn.active { background-color: rgba(var(--rnp-accent-color-shade-2-rgb), 0.18); color: rgb(var(--rnp-accent-color-shade-2-rgb)); }
-#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn.active svg { fill: currentColor; }
-#rnp-view .rnp-lyrics-switch .rnp-lyrics-switch-btn.unavailable { opacity: 0.25; }
-
 body.rnp-text-glow .rnp-lyrics-line > div,
 body.rnp-text-glow .rnp-lyrics-overview-line > div,
 body.rnp-text-glow .rnp-contributors > div {

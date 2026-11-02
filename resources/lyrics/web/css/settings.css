@@ -39,6 +39,8 @@
   transition: opacity .16s ease, transform .2s ease;
 }
 .bncm-settings[hidden] { display: none; }
+/* fading out: clicks go to the page, not to a row that is going away */
+.bncm-settings:not(.open) { pointer-events: none; }
 .bncm-settings.open { opacity: 1; transform: none; transition: opacity .18s ease, transform .26s cubic-bezier(.2, .8, .2, 1); }
 .bncm-settings * { box-sizing: border-box; }
 .bncm-settings button { font: inherit; color: inherit; background: none; border: 0; margin: 0; padding: 0; cursor: default; -webkit-appearance: none; appearance: none; }

@@ -2,7 +2,7 @@
 // place of the animated lyric column (which keeps running, hidden, so it comes back where it is).
 // The current line is lit as the song plays and kept in view unless you are scrolling or
 // selecting; a click on a line (or a right click, as in RNPN) plays from there; 复制全部 copies the
-// whole text. The same button or Esc leaves.
+// whole text. Opened from 设置 › 歌词; 退出, Esc or another view leaves.
 import { host, send } from './bus.js';
 import { now, onClock } from './clock.js';
 import { isMenuOpen, loadMenuCss, toast } from './menu.js';
@@ -10,6 +10,7 @@ import { state, set, watch } from './state.js';
 
 const HOLD_MS = 3000; // after a wheel or a selection, before the list follows the song again
 const DBL_MS = 250; // a click waits this long for a second click (word selection) before seeking
+const EXIT_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg>';
 const COPY_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="6.5" width="10" height="10.5" rx="2"/><path d="M13.5 6.5V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6.5a2 2 0 0 0 2 2h1.5" stroke-linecap="round"/></svg>';
 
 let on = false;
@@ -28,7 +29,7 @@ let offClock = null;
 const S = () => state.settings || {};
 const lyricTime = () => now() + (S().offset || 0);
 
-/** Called by tools.js; returns the new state. */
+/** Called by settings-ui.js; returns the new state. */
 export function toggleCopyMode(v = !on) {
   if (v === on) return on;
   on = v;
@@ -48,7 +49,6 @@ function enter() {
   offClock = onClock(() => update(false));
   document.addEventListener('bncm-escape', onEscape);
   window.addEventListener('keydown', onKey, true);
-  syncButton();
 }
 
 function leave() {
@@ -63,13 +63,6 @@ function leave() {
   if (list) list.textContent = '';
   rows = [];
   cur = -1;
-  syncButton();
-}
-
-// tools.js sets the button's state from what toggleCopyMode returns; leaving by Esc or by another
-// view has to clear it here.
-function syncButton() {
-  document.querySelector('#rnp-view .bncm-top-copy')?.classList.toggle('bncm-on', on);
 }
 
 function onEscape(e) {
@@ -112,11 +105,12 @@ function ensureDom() {
   wrap = document.createElement('div');
   wrap.className = 'bncm-copy';
   wrap.innerHTML = `<div class="rnp-lyrics rnp-lyrics-overview-container" tabindex="-1"><div class="rnp-lyrics-overview"></div></div>
-    <div class="bncm-copy-actions"><button type="button" class="bncm-copy-btn" title="复制全部歌词">${COPY_ICON}<span>复制全部</span></button></div>`;
+    <div class="bncm-copy-actions"><button type="button" class="bncm-copy-btn" title="复制全部歌词">${COPY_ICON}<span>复制全部</span></button><button type="button" class="bncm-copy-btn bncm-copy-exit" title="退出复制模式（Esc）">${EXIT_ICON}<span>退出</span></button></div>`;
   col.append(wrap);
   scroller = wrap.firstElementChild;
   list = scroller.firstElementChild;
   wrap.querySelector('.bncm-copy-btn').addEventListener('click', (e) => { e.stopPropagation(); copyAll(); });
+  wrap.querySelector('.bncm-copy-exit').addEventListener('click', (e) => { e.stopPropagation(); toggleCopyMode(false); });
 
   scroller.addEventListener('wheel', () => { holdUntil = performance.now() + HOLD_MS; }, { passive: true });
   scroller.addEventListener('pointerdown', (e) => {
