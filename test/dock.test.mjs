@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { isPinned, pinToDock, unpinFromDock } from '../src/dock.mjs';
+import { isPinned, pinToDock, replaceInDock, unpinFromDock } from '../src/dock.mjs';
 
 const domain = `cc.microblock.betterncm-mac.test-dock-${process.pid}`;
 const APP = '/Users/someone/Applications/BetterNCM.app';
@@ -39,4 +39,21 @@ test('a path with spaces is stored percent-encoded and still matched', () => {
   assert.match(defaults('read', domain, 'persistent-apps'), /some%20one/);
   assert.equal(isPinned(spaced, { domain }), true);
   assert.equal(unpinFromDock(spaced, { domain }), true);
+});
+
+test('replaceInDock puts the app in the old tile\'s place and back', () => {
+  const NCM = '/Applications/NeteaseMusic.app';
+  const NCM_TILE = '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key>'
+    + '<string>file:///Applications/NeteaseMusic.app/</string><key>_CFURLStringType</key><integer>15</integer>'
+    + '</dict><key>file-label</key><string>网易云音乐</string><key>bundle-identifier</key><string>com.netease.163music</string></dict>'
+    + '<key>tile-type</key><string>file-tile</string></dict>';
+  defaults('write', domain, 'persistent-apps', '-array', NCM_TILE, OTHER);
+  pinToDock(APP, { domain }); // a stray tile at the end goes
+  assert.equal(replaceInDock(NCM, APP, { domain }), true);
+  const urls = () => [...defaults('read', domain, 'persistent-apps').matchAll(/_CFURLString" = "([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(urls(), ['file:///Users/someone/Applications/BetterNCM.app/', 'file:///System/Applications/Mail.app/']);
+  assert.doesNotMatch(defaults('read', domain, 'persistent-apps'), /com\.netease\.163music/);
+  assert.equal(replaceInDock(NCM, APP, { domain }), false, 'NCM has no tile any more');
+  assert.equal(replaceInDock(APP, NCM, { domain }), true);
+  assert.deepEqual(urls(), ['file:///Applications/NeteaseMusic.app/', 'file:///System/Applications/Mail.app/']);
 });

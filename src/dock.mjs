@@ -69,6 +69,29 @@ export function pinToDock(app, { domain = DOCK } = {}) {
   return true;
 }
 
+// Puts `app` where `old` is in the Dock (BetterNCM.app in NetEase Cloud Music's place, and back
+// on uninstall), keeping the position; other tiles for `app` go. -> false when `old` has no tile.
+export function replaceInDock(old, app, { domain = DOCK } = {}) {
+  const from = tileUrl(old);
+  const to = tileUrl(app);
+  return withExport(domain, (file) => {
+    const urls = tileUrls(file);
+    const at = urls.indexOf(from);
+    if (at < 0) return false;
+    sh('/usr/bin/plutil', ['-replace', `persistent-apps.${at}.tile-data.file-data._CFURLString`, '-string', to, file]);
+    // the label and the bookmark of the old app would otherwise stay with the tile
+    for (const k of ['file-label', 'bundle-identifier', 'book', 'file-mod-date', 'parent-mod-date', 'file-type']) {
+      try { sh('/usr/bin/plutil', ['-remove', `persistent-apps.${at}.tile-data.${k}`, file]); } catch { /* not there */ }
+    }
+    for (const i of urls.map((u, j) => (u === to && j !== at ? j : -1)).filter((j) => j >= 0).reverse()) {
+      sh('/usr/bin/plutil', ['-remove', `persistent-apps.${i}`, file]);
+    }
+    sh('/usr/bin/defaults', ['import', domain, file]);
+    restartDock(domain);
+    return true;
+  });
+}
+
 // Removes every tile for the app. -> false when there was none.
 export function unpinFromDock(app, { domain = DOCK } = {}) {
   const url = tileUrl(app);

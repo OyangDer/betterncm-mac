@@ -12,7 +12,7 @@ import {
 } from '../src/config.mjs';
 import { log, setQuiet } from '../src/log.mjs';
 import { alertDialogDetached } from '../src/dialog.mjs';
-import { pinToDock, unpinFromDock, isPinned } from '../src/dock.mjs';
+import { pinToDock, unpinFromDock, isPinned, replaceInDock } from '../src/dock.mjs';
 
 const WRAPPER_ID = 'cc.microblock.betterncm-mac';
 const MIN_NODE = 22; // src/cdp.mjs uses the global WebSocket
@@ -41,9 +41,10 @@ Usage: bncm-mac <command> [options]
   install-app [--dest DIR] [--dock]
                                  (source checkout) write BetterNCM.app (default ~/Applications)
                                  and install the login agent; --dock also pins the app
-  setup-app [--dock] [--no-agent]
-                                 (self-contained app) copy NCM's icon into it and install the login
-                                 agent; the app does this itself the first time it is opened
+  setup-app [--dock|--no-dock] [--no-agent]
+                                 (self-contained app) copy NCM's icon into it, put it in the Dock in
+                                 NCM's place and install the login agent; the app does this itself
+                                 the first time it is opened
   uninstall-app [--dest DIR]     remove BetterNCM.app (and its Dock icon)
   uninstall [--purge] [--dest DIR]
                                  remove the login agent and BetterNCM.app, and reopen NCM as it is
@@ -118,8 +119,9 @@ async function cmdRun(mode, values) {
   const { runInjector, liveState } = await import('../src/injector.mjs');
   const { findNcm, launchNcm } = await import('../src/launcher.mjs');
   const notify = !!values.daemon;
-  // --replace (install.sh): an NCM without the debug port is reopened without asking
-  const replace = !!values.replace && mode === 'launch';
+  // --replace (install.sh), and the Dock icon (--daemon): an NCM without the debug port is reopened
+  // without asking; opening BetterNCM is asking for it
+  const replace = (!!values.replace || !!values.daemon) && mode === 'launch';
   let res = await runInjector({ mode, port: portArg(values.port), notify, replace });
   if (res.alreadyRunning && mode === 'launch') {
     // Opening the wrapper twice should just bring NCM to the front, but only an NCM that has
@@ -463,10 +465,32 @@ async function cmdInstallApp(values) {
   return 0;
 }
 
+// BetterNCM.app into the Dock: in NetEase Cloud Music's place when NCM has a tile (it has NCM's
+// icon; the way in stays where it was), else at the end.
+function placeInDock(app) {
+  try {
+    if (isPinned(app)) console.log('already in the Dock');
+    else if (replaceInDock(NCM_APP, app)) console.log("took NetEase Cloud Music's place in the Dock");
+    else console.log(pinToDock(app) ? 'pinned to the Dock' : 'already in the Dock');
+  } catch (e) {
+    console.log(`could not pin it to the Dock (${e.message})`);
+  }
+}
+
+// Uninstall: NCM gets its tile back where BetterNCM's was (unless it has one), else the tile goes.
+function restoreDock(app) {
+  try {
+    if (!isPinned(NCM_APP) && replaceInDock(app, NCM_APP)) console.log('put NetEase Cloud Music back in the Dock');
+    else unpinQuietly(app);
+  } catch { /* a stale Dock icon is harmless */ }
+}
+
 // The self-contained app's first run on this Mac (its launcher runs this, and install.sh): NCM's
-// icon, which is not ours to ship, and the login agent, so NCM itself is the way in and
-// BetterNCM.app needs no Dock icon (an old install's tile is taken away; --dock pins it). The app
-// path it was set up at is kept in the data dir: a moved or newly installed app is set up again.
+// icon, which is not ours to ship; the Dock, where BetterNCM.app (with NCM's icon) takes NCM's
+// place, so the usual way in opens NCM with BetterNCM and no swap; and the login agent, for NCM
+// opened any other way. The app path it was set up at is kept in the data dir: a moved or newly
+// installed app is set up again, and a Dock icon the user took away stays away (--dock puts it
+// back).
 async function cmdSetupApp(values) {
   const app = STANDALONE_APP;
   if (!app) fail('setup-app is for the self-contained BetterNCM.app; in a source checkout, use install-app');
@@ -475,23 +499,12 @@ async function cmdSetupApp(values) {
     refreshBundle(app);
     console.log("copied NetEase Cloud Music's icon");
   }
-  const { agentPlistPath } = await import('../src/agent.mjs');
-  const hadAgent = fs.existsSync(agentPlistPath());
   // every time: the app may have moved, and an update may change the agent
-  const agentOk = values['no-agent'] ? false : await installAgentQuietly();
+  if (!values['no-agent']) await installAgentQuietly();
   let prev = null;
   try { prev = fs.readFileSync(appPathMarker(), 'utf8'); } catch { /* first time */ }
   if (prev && prev !== app && !fs.existsSync(prev)) unpinQuietly(prev); // moved: the old tile points nowhere
-  if (values.dock) {
-    try {
-      console.log(pinToDock(app) ? 'pinned to the Dock' : 'already in the Dock');
-    } catch (e) {
-      console.log(`could not pin it to the Dock (${e.message})`);
-    }
-  } else if (agentOk && !hadAgent) {
-    // from the time BetterNCM.app was the way in
-    try { if (isPinned(app)) unpinQuietly(app); } catch { /* leave it */ }
-  }
+  if (values.dock || (prev !== app && !values['no-dock'])) placeInDock(app);
   if (prev === app) return 0;
   fs.mkdirSync(getDataPath(), { recursive: true });
   fs.writeFileSync(appPathMarker(), app);
@@ -520,7 +533,7 @@ async function cmdUninstallApp(values) {
   if (bundleIdOf(app) !== WRAPPER_ID) fail(`${app} is not a BetterNCM wrapper; not removing it`);
   fs.rmSync(app, { recursive: true, force: true });
   console.log(`removed ${app}`);
-  unpinQuietly(app);
+  restoreDock(app);
   forgetAppPath(app);
   return 0;
 }
@@ -585,7 +598,7 @@ async function cmdUninstall(values) {
   else {
     fs.rmSync(app, { recursive: true, force: true });
     console.log(`removed ${app}`);
-    unpinQuietly(app);
+    restoreDock(app);
     forgetAppPath(app);
   }
 
@@ -619,7 +632,7 @@ async function main() {
       dest: { type: 'string' },
       purge: { type: 'boolean' },
       dock: { type: 'boolean' },
-      'no-dock': { type: 'boolean' }, // accepted from older install.sh; the Dock is opt-in now
+      'no-dock': { type: 'boolean' },
       agent: { type: 'boolean' },
       'no-agent': { type: 'boolean' },
       replace: { type: 'boolean' },

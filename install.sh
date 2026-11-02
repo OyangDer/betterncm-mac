@@ -18,7 +18,7 @@
 #                               own BetterNCM.app/Contents/MacOS/BetterNCM uninstall does the same
 #
 # Environment: BNCM_REF (a GitHub branch or tag instead of the npm release), BNCM_DEST (install
-# folder), BNCM_DOCK=1 (also pin BetterNCM.app to the Dock), BNCM_NO_AGENT=1 (no login agent),
+# folder), BNCM_NO_DOCK=1 (leave the Dock alone), BNCM_NO_AGENT=1 (no login agent),
 # BNCM_NO_OPEN=1, BNCM_SRC (a local checkout instead of the download),
 # BNCM_NPM_REGISTRIES (registries to try, in order).
 
@@ -138,17 +138,21 @@ main() {
   fi
   rm -rf "$old"
 
-  # NCM's icon and the login agent, which from now on gives NCM BetterNCM however it is opened.
+  # NCM's icon, the Dock (BetterNCM.app in NCM's place) and the login agent, which gives NCM
+  # BetterNCM however else it is opened.
   local setup=(setup-app) setup_out
-  if [ -n "${BNCM_DOCK:-}" ]; then setup+=(--dock); fi
+  if [ -n "${BNCM_NO_DOCK:-}" ]; then setup+=(--no-dock); fi
   if [ -n "${BNCM_NO_AGENT:-}" ]; then setup+=(--no-agent); fi
   setup_out="$("$app/Contents/MacOS/BetterNCM" "${setup[@]}" </dev/null 2>&1 || true)"
 
   say ""
   say "安装好了：$app"
   case "$setup_out" in
-    *"login agent is installed"*|*"installed the login agent"*) say "以后直接打开网易云音乐就带插件，开机、重启后也一样。" ;;
-    *) say "后台助手没装上（$setup_out），暂时请从 BetterNCM 打开网易云。" ;;
+    *"took NetEase Cloud Music's place"*) say "Dock 里的网易云图标已经换成带插件的 BetterNCM（图标一样），平时点它就行。" ;;
+    *"pinned to the Dock"*|*"already in the Dock"*) say "已放进 Dock（网易云的图标），平时点它打开网易云。" ;;
+  esac
+  case "$setup_out" in
+    *"login agent is installed"*|*"installed the login agent"*) say "从别处打开网易云（开机自动打开、聚焦搜索、启动台）也会自动带上插件，窗口会闪一下。" ;;
   esac
   case "$stopped" in
     *"stopping the injector"*) say "网易云正开着：BetterNCM 已经换成新版本，网易云的页面会刷新一次。" ;;

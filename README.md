@@ -27,9 +27,11 @@ curl -fsSL https://registry.npmmirror.com/betterncm-mac/latest | sed -n 's/.*"ta
 curl -fsSL https://raw.githubusercontent.com/OyangDer/betterncm-mac/main/install.sh | bash
 ```
 
-它会下载 BetterNCM 和它要用的 Node.js（自带，不影响电脑上原有的东西），装到“应用程序”里，再装一个后台小助手，然后带着插件打开网易云。整个过程一般不到一分钟。两样都优先从国内镜像下载，并核对校验值；镜像连不上时改从 npm 官方或 GitHub 下载。装好的 BetterNCM 用网易云的图标，在中文系统里叫“网易云音乐 BetterNCM”，在英文系统里叫“NetEaseMusic BetterNCM”，聚焦搜索里输入“网易云”或“BetterNCM”就能找到。
+它会下载 BetterNCM 和它要用的 Node.js（自带，不影响电脑上原有的东西），装到“应用程序”里，放进 Dock（换掉 Dock 里原来的网易云图标），再装一个后台小助手，然后带着插件打开网易云。整个过程一般不到一分钟。两样都优先从国内镜像下载，并核对校验值；镜像连不上时改从 npm 官方或 GitHub 下载。装好的 BetterNCM 用网易云的图标，在中文系统里叫“网易云音乐 BetterNCM”，在英文系统里叫“NetEaseMusic BetterNCM”，聚焦搜索里输入“网易云”或“BetterNCM”就能找到。
 
-以后**照常打开网易云**就行：从 Dock、启动台、聚焦搜索打开，开机时 macOS 自动重新打开，或者网易云自己重启，都会带上插件。网易云启动时必须带调试端口插件才加载得进去，而它自己的图标不带，所以后台小助手（一个登录项，不在 Dock 里出现，平时不占 CPU）会在网易云打开后的一两秒内把它关掉、带上插件重新打开，窗口会闪一下。已经开着很久的网易云（比如装 BetterNCM 之前就开着的）它不会去动，免得打断正在播放的音乐。
+以后**点 Dock 里的网易云图标**就行：那是 BetterNCM（用的是网易云的图标），直接带着插件打开网易云。网易云启动时必须带调试端口插件才加载得进去，而网易云自己的图标不带。
+
+从别处打开了原版网易云（开机时 macOS 自动重新打开、聚焦搜索、启动台），后台小助手（一个登录项，不在 Dock 里出现，平时不占 CPU）会在一两秒内把它关掉、带上插件重新打开，窗口会闪一下。网易云自己重启时也会自动接上。已经开着很久的原版网易云（比如装 BetterNCM 之前就开着的）它不会去动，免得打断正在播放的音乐；点一下 Dock 里的图标就会换成带插件的。
 
 **更新**：再运行一次上面那行命令。网易云开着也没关系，会直接换成新版本，网易云的页面刷新一次。
 
@@ -39,7 +41,6 @@ curl -fsSL https://raw.githubusercontent.com/OyangDer/betterncm-mac/main/install
 2. macOS 会通知“BNCMAgent 可以在后台运行”，这就是后台小助手，在“系统设置 → 通用 → 登录项与扩展”里能看到。
 3. 网易云右上角（设置按钮旁边）多了一个拼图形状的“插件”按钮，见[插件](#插件)。点播放栏左下角的封面，打开的是 BetterNCM 的[歌词窗口](#歌词窗口)。
 
-BetterNCM.app 还在“应用程序”里（插件和后台程序都在它里面），不用管它，也不用再从它打开网易云。
 
 ### 从源码安装
 
@@ -163,7 +164,7 @@ BetterNCM 的插件管理和插件市场默认**隐藏**：市场里的插件大
 /Applications/BetterNCM.app/Contents/MacOS/BetterNCM uninstall
 ```
 
-两种方式都会移除后台小助手，停止 BetterNCM，把开着的网易云关掉再以原版重新打开，删掉 BetterNCM.app（和它的 Dock 图标，如果有），保留插件和设置（在 `~/Library/Application Support/BetterNCM-mac`，不要了可以直接删掉这个文件夹）。从源码装的，在项目文件夹里运行 `node bin/bncm-mac.mjs uninstall`（加 `--purge` 会同时删掉插件、设置和日志），之后项目文件夹也可以删掉。
+两种方式都会移除后台小助手，停止 BetterNCM，把开着的网易云关掉再以原版重新打开，删掉 BetterNCM.app，Dock 里换回原来的网易云图标，保留插件和设置（在 `~/Library/Application Support/BetterNCM-mac`，不要了可以直接删掉这个文件夹）。从源码装的，在项目文件夹里运行 `node bin/bncm-mac.mjs uninstall`（加 `--purge` 会同时删掉插件、设置和日志），之后项目文件夹也可以删掉。
 
 卸载后网易云就是原版，以后从它自己的图标打开也不会再带插件。
 
@@ -199,7 +200,7 @@ uninstall-app                  （源码）删除 BetterNCM.app 和它的 Dock �
 npm test             # 不需要 npm install
 npm run build:fw     # 重新构建 dist/framework.js（需要 framework/ 的依赖）
 BNCM_SRC="$PWD" BNCM_DEST=/tmp/bncm-test BETTERNCM_PROFILE=/tmp/bncm-test/profile \
-  BNCM_NO_AGENT=1 BNCM_NO_OPEN=1 bash install.sh   # 用这个文件夹试装，不影响已装的那份
+  BNCM_NO_AGENT=1 BNCM_NO_DOCK=1 BNCM_NO_OPEN=1 bash install.sh   # 用这个文件夹试装，不影响已装的那份
 ```
 
 一行命令安装用的是 [install.sh](install.sh)：它下载固定版本的 Node.js（22，按文件里的 SHA-256 校验）和 npm 包 `betterncm-mac` 的最新版本（按 npm 记录的 sha512 校验；先试 npmmirror，再试 npm 官方，都不行就用 GitHub 的 main 分支），再用 [scripts/build-app.mjs](scripts/build-app.mjs) 生成自带 Node.js 的 BetterNCM.app。升级 Node.js 时同时改版本号和两个校验值。
