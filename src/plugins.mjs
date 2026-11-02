@@ -126,6 +126,69 @@ export function readDisableList() {
   return text.split('\n').map((l) => l.trim());
 }
 
+/**
+ * Turns a packed plugin on or off for the next extraction: disable_list.txt holds one slug per
+ * line (the v2 format), and other lines in it are kept.
+ */
+export function setPluginEnabled(slug, enabled) {
+  if (!isSafeSlug(slug)) throw new Error(`bad plugin slug: ${slug}`);
+  const file = path.join(getDataPath(), 'disable_list.txt');
+  const lines = readDisableList().filter((l) => l && l !== slug);
+  if (!enabled) lines.push(slug);
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, lines.length ? `${lines.join('\n')}\n` : '');
+  fs.renameSync(tmp, file);
+}
+
+/**
+ * The plugins the in-page plugin panel lists: every packed plugin with whether it is switched on
+ * and, for one that is on but not loaded, why ({note}); then plugins_dev folders (always loaded,
+ * no switch). PluginMarket is left out while the plugin manager is hidden.
+ * -> [{slug, name, version, author, description, enabled, note, dev}]
+ */
+export function listInstalledPlugins(opts = {}) {
+  const dp = getDataPath();
+  const ncmVer = opts.ncmVersion ?? safeNcmVersion() ?? '0.0.0';
+  const disabled = readDisableList();
+  const out = [];
+  const pick = (m, slug, extra) => ({
+    slug,
+    name: typeof m.name === 'string' ? m.name : slug,
+    version: typeof m.version === 'string' ? m.version : '',
+    author: typeof m.author === 'string' ? m.author : '',
+    description: typeof m.description === 'string' ? m.description : '',
+    ...extra,
+  });
+  let files = [];
+  try { files = fs.readdirSync(path.join(dp, 'plugins')).filter((f) => f.endsWith('.plugin')).sort(); } catch { /* none */ }
+  for (const f of files) {
+    let m;
+    let slug;
+    try {
+      m = readZipManifest(path.join(dp, 'plugins', f));
+      slug = manifestSlug(m);
+    } catch {
+      continue;
+    }
+    if (!isSafeSlug(slug)) continue;
+    if (m.name === 'PluginMarket' && !pluginManagerEnabled()) continue;
+    const enabled = !disabled.includes(slug);
+    const reason = enabled ? filterReason(m, slug, ncmVer, []) : null;
+    let note = '';
+    if (reason?.startsWith('replaced by the lyrics window')) note = '歌词窗口开着时不加载';
+    else if (reason) note = '不支持这个版本的网易云';
+    out.push(pick(m, slug, { enabled, note, dev: false }));
+  }
+  let dev = [];
+  try { dev = fs.readdirSync(path.join(dp, 'plugins_dev'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort(); } catch { /* none */ }
+  for (const d of dev) {
+    let m;
+    try { m = parseManifest(fs.readFileSync(path.join(dp, 'plugins_dev', d, 'manifest.json'), 'utf8')); } catch { continue; }
+    out.push(pick(m, d, { enabled: true, note: '开发中的插件（plugins_dev）', dev: true }));
+  }
+  return out;
+}
+
 function ncmMajor(ver) {
   const v = semver.coerce(ver);
   return v ? v.major : NaN;

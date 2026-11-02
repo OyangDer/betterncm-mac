@@ -18,7 +18,8 @@
 #                               own BetterNCM.app/Contents/MacOS/BetterNCM uninstall does the same
 #
 # Environment: BNCM_REF (a GitHub branch or tag instead of the npm release), BNCM_DEST (install
-# folder), BNCM_NO_DOCK=1, BNCM_NO_OPEN=1, BNCM_SRC (a local checkout instead of the download),
+# folder), BNCM_DOCK=1 (also pin BetterNCM.app to the Dock), BNCM_NO_AGENT=1 (no login agent),
+# BNCM_NO_OPEN=1, BNCM_SRC (a local checkout instead of the download),
 # BNCM_NPM_REGISTRIES (registries to try, in order).
 
 # Node 22 (LTS until April 2027) runs on macOS 11 and later, like NCM 3; Node 23 and later need
@@ -137,22 +138,29 @@ main() {
   fi
   rm -rf "$old"
 
+  # NCM's icon and the login agent, which from now on gives NCM BetterNCM however it is opened.
   local setup=(setup-app) setup_out
-  if [ -n "${BNCM_NO_DOCK:-}" ]; then setup+=(--no-dock); fi
+  if [ -n "${BNCM_DOCK:-}" ]; then setup+=(--dock); fi
+  if [ -n "${BNCM_NO_AGENT:-}" ]; then setup+=(--no-agent); fi
   setup_out="$("$app/Contents/MacOS/BetterNCM" "${setup[@]}" </dev/null 2>&1 || true)"
 
   say ""
   say "安装好了：$app"
-  case "$setup_out" in *"pinned to the Dock"*|*"already in the Dock"*) say "已固定到 Dock。" ;; esac
-  say "以后都从它打开网易云音乐，插件才会加载。"
+  case "$setup_out" in
+    *"login agent is installed"*|*"installed the login agent"*) say "以后直接打开网易云音乐就带插件，开机、重启后也一样。" ;;
+    *) say "后台助手没装上（$setup_out），暂时请从 BetterNCM 打开网易云。" ;;
+  esac
   case "$stopped" in
     *"stopping the injector"*) say "网易云正开着：BetterNCM 已经换成新版本，网易云的页面会刷新一次。" ;;
-    *) say "如果网易云正开着，会问你要不要用 BetterNCM 重新打开它；第一次还可能问是否允许“BetterNCM”或“node”控制“网易云音乐”，都点允许。" ;;
+    *) say "网易云正开着的话，会关闭并带着插件重新打开一次。" ;;
   esac
-  say "卸载：'$app/Contents/MacOS/BetterNCM' uninstall"
+  say "插件开关和卸载：网易云右上角的插件按钮。"
   say ""
-  say "Installed $app. Open NetEase Cloud Music from it from now on."
-  if [ -z "${BNCM_NO_OPEN:-}" ]; then open "$app" </dev/null; fi
+  say "Installed $app. Open NetEase Cloud Music as usual; BetterNCM loads into it."
+  # Start (or reopen) NCM with BetterNCM now, without asking: this is what was just installed.
+  if [ -z "${BNCM_NO_OPEN:-}" ]; then
+    nohup "$app/Contents/MacOS/BetterNCM" launch --daemon --replace </dev/null >/dev/null 2>&1 &
+  fi
 }
 
 uninstall() {

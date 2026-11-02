@@ -6,12 +6,15 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import {
-  PROJECT_ROOT, BNCM_VERSION, NCM_APP,
+  PROJECT_ROOT, BNCM_VERSION, MAC_VERSION, NCM_APP,
   getDataPath, readConfig, readConfigKey, writeConfigKey, getNcmVersion,
 } from './config.mjs';
 import { log } from './log.mjs';
 import * as fsapi from './fsapi.mjs';
-import { extractPackedPlugins, collectHijacks } from './plugins.mjs';
+
+// The lyrics window's row in the plugin panel (not a plugin: config mac.lyricsWindow).
+const LYRICS_WINDOW_SLUG = '@lyrics-window';
+import { extractPackedPlugins, collectHijacks, listInstalledPlugins, setPluginEnabled } from './plugins.mjs';
 import * as macos from './macos.mjs';
 
 const ORPHEUS_ORIGIN = 'orpheus://orpheus';
@@ -488,6 +491,16 @@ export async function startServer({ apiKey, hooks = {} }) {
       }
       send(res, 200, css, 'text/css; charset=utf-8');
     },
+    // The plugin panel in NCM's title bar (prelude/plugin-button.js). The lyrics window, which is
+    // BetterNCM's own and replaces RefinedNowPlayingNext, comes first.
+    '/internal/plugins': (_q, res) => sendJson(res, {
+      version: MAC_VERSION,
+      plugins: [
+        { slug: LYRICS_WINDOW_SLUG, name: '歌词窗口', version: '', author: '', builtin: true, dev: false,
+          description: 'BetterNCM 自带的歌词页，关掉后改用 RefinedNowPlayingNext', enabled: readConfigKey('mac.lyricsWindow') === 'true', note: '' },
+        ...listInstalledPlugins(),
+      ],
+    }),
   };
 
   const POST = {
@@ -544,6 +557,28 @@ export async function startServer({ apiKey, hooks = {} }) {
       } catch (e) {
         send(res, 500, String(e?.message ?? e));
       }
+    },
+    // {slug, enabled}: takes effect when the plugins are extracted again (the panel then reloads the page)
+    '/internal/plugins/enabled': async (_q, req, res) => {
+      const body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}');
+      if (typeof body.slug !== 'string' || typeof body.enabled !== 'boolean') { send(res, 400, 'need {slug, enabled}'); return; }
+      // the one mac.* key the page may change: the injector's config watcher swaps the lyrics
+      // window and RefinedNowPlayingNext and reloads the page itself
+      if (body.slug === LYRICS_WINDOW_SLUG) {
+        writeConfigKey('mac.lyricsWindow', String(body.enabled));
+        send(res, 200);
+        return;
+      }
+      setPluginEnabled(body.slug, body.enabled);
+      if (hooks.onReloadPlugin) await hooks.onReloadPlugin();
+      else extractPackedPlugins();
+      send(res, 200);
+    },
+    // 卸载 BetterNCM in the plugin panel. Answered first: the uninstall stops this injector.
+    '/internal/uninstall': async (_q, _req, res) => {
+      if (!hooks.onUninstall) { send(res, 404); return; }
+      send(res, 200);
+      setTimeout(() => hooks.onUninstall(), 200);
     },
     '/internal/devtools': async (q, req, res) => {
       let target = req.headers['x-bncm-target'] ?? q.get('target') ?? '';

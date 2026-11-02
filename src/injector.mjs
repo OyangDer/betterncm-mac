@@ -2,10 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   getDataPath, ensureDataDirs, readConfigKey, writeConfigKey, getMacConfig, isSafeMode, getNcmVersion, SAFE_MODE_KEY,
-  MAC_VERSION, NCM_APP, ncmSupport, TESTED_NCM_LABEL,
+  MAC_VERSION, NCM_APP, PROJECT_ROOT, ncmSupport, TESTED_NCM_LABEL,
 } from './config.mjs';
 import { log, setLogFile } from './log.mjs';
 import { connectBrowser } from './cdp.mjs';
@@ -107,8 +107,10 @@ function injectionFingerprint() {
  * mode 'launch': find or launch NCM with the CDP port (may ask to restart it).
  * mode 'attach': only attach to a running NCM on `port` (or the port it was started with).
  * notify: show failures in a dialog too (the Dock/Finder wrapper, where nobody reads stderr).
+ * replace: an NCM running without the port is reopened with it at once, without asking (the
+ * login agent, for an NCM that was just opened).
  */
-export async function runInjector({ mode = 'launch', port = null, notify = false } = {}) {
+export async function runInjector({ mode = 'launch', port = null, notify = false, replace = false } = {}) {
   ensureDataDirs();
   setLogFile(path.join(getDataPath(), 'log/injector.log'));
   log(`betterncm-mac ${MAC_VERSION} starting (${mode}), data dir ${getDataPath()}, NCM ${getNcmVersion()}`);
@@ -523,6 +525,17 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
         },
         onLyricsEval: (js) => lyrics.evalInWindow(js),
         onLyricsSnapshot: (file) => lyrics.snapshotWindow(file),
+        // 卸载 BetterNCM (the plugin panel): `uninstall` in a process of its own, which stops this
+        // injector, removes the login agent and the app, and reopens NCM without BetterNCM.
+        onUninstall: () => {
+          log('uninstalling, as asked from the plugin panel');
+          try {
+            const out = fs.openSync(path.join(getDataPath(), 'log/uninstall.log'), 'a');
+            spawn(process.execPath, [path.join(PROJECT_ROOT, 'bin/bncm-mac.mjs'), 'uninstall'], { detached: true, stdio: ['ignore', out, out] }).unref();
+          } catch (e) {
+            log('starting the uninstall failed:', e.message);
+          }
+        },
         onHijackReport: (targetId, ids) => {
           if (ids?.length) log(`hijacks applied in ${targetId}: ${ids.join(', ')}`);
         },
@@ -535,6 +548,7 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
       preferredPort: Number(readConfigKey('mac.cdpPort')) || 9222,
       launch: mode === 'launch',
       port,
+      replace,
     });
     cdpPort = ncm.port;
     ncmPid = ncm.pid;

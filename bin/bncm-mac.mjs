@@ -12,7 +12,7 @@ import {
 } from '../src/config.mjs';
 import { log, setQuiet } from '../src/log.mjs';
 import { alertDialogDetached } from '../src/dialog.mjs';
-import { pinToDock, unpinFromDock } from '../src/dock.mjs';
+import { pinToDock, unpinFromDock, isPinned } from '../src/dock.mjs';
 
 const WRAPPER_ID = 'cc.microblock.betterncm-mac';
 const MIN_NODE = 22; // src/cdp.mjs uses the global WebSocket
@@ -26,20 +26,29 @@ const USAGE = `betterncm-mac ${MAC_VERSION} - BetterNCM for NetEase Cloud Music 
 
 Usage: bncm-mac <command> [options]
 
-  launch [--daemon] [--port N]   find or launch NCM with the debug port, inject, stay running
+  launch [--daemon] [--port N] [--replace]
+                                 find or launch NCM with the debug port, inject, stay running;
+                                 --replace reopens an NCM without the port without asking
+  launch --agent                 (the login agent) inject into NCM if it was just opened
+                                 without the debug port, quietly; otherwise do nothing
   attach [--port N]              attach to an NCM that already has a debug port; never launches or quits it
   doctor                         print versions, ports, targets, data dir and plugin decisions
   reload                         re-extract plugins in the running injector and reload the pages
   stop                           stop the injector; NCM keeps running (open BetterNCM.app to resume)
+  install-agent / uninstall-agent
+                                 add or remove the login agent, which gives NCM BetterNCM however
+                                 it is opened (its own icon, login, a restart)
   install-app [--dest DIR] [--dock]
-                                 (source checkout) write BetterNCM.app (default ~/Applications);
-                                 --dock also pins it
-  setup-app [--no-dock]          (self-contained app) copy NCM's icon into it and pin it to the
-                                 Dock; the app does this itself the first time it is opened
+                                 (source checkout) write BetterNCM.app (default ~/Applications)
+                                 and install the login agent; --dock also pins the app
+  setup-app [--dock] [--no-agent]
+                                 (self-contained app) copy NCM's icon into it and install the login
+                                 agent; the app does this itself the first time it is opened
   uninstall-app [--dest DIR]     remove BetterNCM.app (and its Dock icon)
   uninstall [--purge] [--dest DIR]
-                                 stop the injector and remove BetterNCM.app; --purge also deletes
-                                 the data dir (plugins, settings, logs)
+                                 remove the login agent and BetterNCM.app, and reopen NCM as it is
+                                 without BetterNCM; --purge also deletes the data dir (plugins,
+                                 settings, logs)
 
 Data dir: ${getDataPath()} (override with BETTERNCM_PROFILE)
 ${STANDALONE_APP ? `Commands run as: '${STANDALONE_APP}/Contents/MacOS/BetterNCM' <command>\n` : ''}
@@ -73,12 +82,45 @@ function portArg(v) {
   return n;
 }
 
+// How young an NCM without the debug port may be for the login agent to reopen it: one opened
+// from its own icon, by macOS at login or by NCM restarting itself. An older one (left running
+// when BetterNCM was installed, or opened while the agent was not loaded) may be playing; it is
+// left alone.
+const AGENT_FRESH_S = 120;
+
+// `launch --agent`: run by the login agent each time NCM starts (and once when it starts itself).
+// Never shows anything; the other cases end at once.
+async function cmdAgentLaunch() {
+  setQuiet(true);
+  const { runInjector, liveState } = await import('../src/injector.mjs');
+  const { findNcm, processAge } = await import('../src/launcher.mjs');
+  const { setLogFile } = await import('../src/log.mjs');
+  ensureDataDirs();
+  setLogFile(path.join(getDataPath(), 'log/injector.log'));
+  if (liveState()) return 0; // the running injector looks after it (it may be relaunching NCM)
+  const ncm = await findNcm();
+  if (!ncm) return 0;
+  if (!ncm.port) {
+    const age = await processAge(ncm.pid);
+    if (age == null || age > AGENT_FRESH_S) {
+      log(`agent: NCM (pid ${ncm.pid}) has been running ${age ?? '?'} s without the debug port; leaving it alone`);
+      return 0;
+    }
+    log(`agent: NCM (pid ${ncm.pid}) was opened without the debug port ${age} s ago; reopening it with BetterNCM`);
+  }
+  const res = await runInjector({ mode: 'launch', replace: true });
+  return res.alreadyRunning ? 0 : res.code;
+}
+
 async function cmdRun(mode, values) {
+  if (values.agent) return cmdAgentLaunch();
   if (values.daemon) setQuiet(true);
   const { runInjector, liveState } = await import('../src/injector.mjs');
   const { findNcm, launchNcm } = await import('../src/launcher.mjs');
   const notify = !!values.daemon;
-  let res = await runInjector({ mode, port: portArg(values.port), notify });
+  // --replace (install.sh): an NCM without the debug port is reopened without asking
+  const replace = !!values.replace && mode === 'launch';
+  let res = await runInjector({ mode, port: portArg(values.port), notify, replace });
   if (res.alreadyRunning && mode === 'launch') {
     // Opening the wrapper twice should just bring NCM to the front, but only an NCM that has
     // the debug port: the other injector may be winding down (NCM quitting) or restarting it,
@@ -99,7 +141,7 @@ async function cmdRun(mode, values) {
         try { await launchNcm(st.cdpPort); } catch (e) { log('launching NCM for the running injector failed:', e.message); }
       }
       if (!liveState()) {
-        res = await runInjector({ mode, port: portArg(values.port), notify });
+        res = await runInjector({ mode, port: portArg(values.port), notify, replace });
         if (!res.alreadyRunning) return res.code;
       }
       if (Date.now() > deadline) break;
@@ -200,6 +242,14 @@ async function cmdDoctor() {
     check('OK', `${wrapper} (node ${targets.node})`);
   }
 
+  {
+    const { agentPlistPath, agentLoaded, AGENT_BINARY } = await import('../src/agent.mjs');
+    if (!fs.existsSync(agentPlistPath())) check('WARN', 'login agent not installed: NCM opened from its own icon has no BetterNCM (run install-agent)');
+    else if (!fs.existsSync(AGENT_BINARY)) check('FAIL', `login agent: ${AGENT_BINARY} is missing`);
+    else if (!agentLoaded()) check('WARN', 'login agent installed but not loaded (run install-agent)');
+    else check('OK', 'login agent');
+  }
+
   const { findNcm } = await import('../src/launcher.mjs');
   const ncm = await findNcm();
   out('NCM process', !ncm ? 'not running' : `pid ${ncm.pid}, ${ncm.port ? `CDP port ${ncm.port}` : 'no debug port'}`);
@@ -275,6 +325,13 @@ function shellQuote(s) {
 
 function appPath(values) {
   if (!values.dest && STANDALONE_APP) return STANDALONE_APP;
+  // where install-app last wrote it (uninstall from the plugin panel passes no --dest)
+  if (!values.dest) {
+    try {
+      const recorded = fs.readFileSync(appPathMarker(), 'utf8');
+      if (recorded && fs.existsSync(recorded) && bundleIdOf(recorded) === WRAPPER_ID) return recorded;
+    } catch { /* none */ }
+  }
   return path.join(values.dest ? path.resolve(values.dest) : path.join(os.homedir(), 'Applications'), 'BetterNCM.app');
 }
 
@@ -315,6 +372,35 @@ function bundleIdOf(app) {
   }
 }
 
+// The command that runs this CLI, for the login agent: the self-contained app's own launcher
+// (which finds its Node.js wherever the app is), or node and this checkout's CLI.
+function launcherArgv() {
+  if (STANDALONE_APP) return [path.join(STANDALONE_APP, 'Contents/MacOS/BetterNCM')];
+  return [stableNodePath(), path.join(PROJECT_ROOT, 'bin/bncm-mac.mjs')];
+}
+
+async function installAgentQuietly() {
+  const { installAgent } = await import('../src/agent.mjs');
+  try {
+    const r = installAgent({ launcher: launcherArgv() });
+    console.log(r.changed ? 'installed the login agent' : 'the login agent is installed');
+    return true;
+  } catch (e) {
+    console.log(`could not install the login agent (${e.message})`);
+    return false;
+  }
+}
+
+async function cmdInstallAgent() {
+  return (await installAgentQuietly()) ? 0 : 1;
+}
+
+async function cmdUninstallAgent() {
+  const { uninstallAgent } = await import('../src/agent.mjs');
+  console.log(uninstallAgent() ? 'removed the login agent' : 'the login agent is not installed');
+  return 0;
+}
+
 // Prefer a stable symlink to the running node over the versioned path process.execPath resolves
 // to (Homebrew's Cellar/node/<version>, which the next upgrade removes).
 function stableNodePath() {
@@ -326,7 +412,7 @@ function stableNodePath() {
   return process.execPath;
 }
 
-function cmdInstallApp(values) {
+async function cmdInstallApp(values) {
   if (STANDALONE_APP) fail(`${STANDALONE_APP} is self-contained; install-app is for a source checkout`);
   const app = appPath(values);
   if (fs.existsSync(app)) {
@@ -365,7 +451,10 @@ function cmdInstallApp(values) {
       console.log(`could not pin it to the Dock (${e.message}); drag it there yourself`);
     }
   }
-  console.log('Open BetterNCM.app instead of NetEase Cloud Music (keep it in the Dock).');
+  fs.mkdirSync(getDataPath(), { recursive: true });
+  fs.writeFileSync(appPathMarker(), app);
+  await installAgentQuietly();
+  console.log('Open NetEase Cloud Music as usual: the login agent adds BetterNCM.');
   console.log('If this folder moves, run install-app again from the new place.');
   console.log('');
   console.log('Security: while NCM runs this way, any program on this Mac can control it over');
@@ -375,10 +464,10 @@ function cmdInstallApp(values) {
 }
 
 // The self-contained app's first run on this Mac (its launcher runs this, and install.sh): NCM's
-// icon, which is not ours to ship, and a Dock icon. The app path it was set up at is kept in the
-// data dir: a moved or newly installed app is set up again, and a Dock icon the user took away
-// stays away.
-function cmdSetupApp(values) {
+// icon, which is not ours to ship, and the login agent, so NCM itself is the way in and
+// BetterNCM.app needs no Dock icon (an old install's tile is taken away; --dock pins it). The app
+// path it was set up at is kept in the data dir: a moved or newly installed app is set up again.
+async function cmdSetupApp(values) {
   const app = STANDALONE_APP;
   if (!app) fail('setup-app is for the self-contained BetterNCM.app; in a source checkout, use install-app');
   const contents = path.join(app, 'Contents');
@@ -386,17 +475,24 @@ function cmdSetupApp(values) {
     refreshBundle(app);
     console.log("copied NetEase Cloud Music's icon");
   }
+  const { agentPlistPath } = await import('../src/agent.mjs');
+  const hadAgent = fs.existsSync(agentPlistPath());
+  // every time: the app may have moved, and an update may change the agent
+  const agentOk = values['no-agent'] ? false : await installAgentQuietly();
   let prev = null;
   try { prev = fs.readFileSync(appPathMarker(), 'utf8'); } catch { /* first time */ }
-  if (prev === app) return 0;
-  if (prev && !fs.existsSync(prev)) unpinQuietly(prev); // moved: the old tile points nowhere
-  if (!values['no-dock']) {
+  if (prev && prev !== app && !fs.existsSync(prev)) unpinQuietly(prev); // moved: the old tile points nowhere
+  if (values.dock) {
     try {
       console.log(pinToDock(app) ? 'pinned to the Dock' : 'already in the Dock');
     } catch (e) {
       console.log(`could not pin it to the Dock (${e.message})`);
     }
+  } else if (agentOk && !hadAgent) {
+    // from the time BetterNCM.app was the way in
+    try { if (isPinned(app)) unpinQuietly(app); } catch { /* leave it */ }
   }
+  if (prev === app) return 0;
   fs.mkdirSync(getDataPath(), { recursive: true });
   fs.writeFileSync(appPathMarker(), app);
   return 0;
@@ -411,8 +507,11 @@ function forgetAppPath(app) {
 
 async function cmdUninstallApp(values) {
   const app = appPath(values);
-  // The self-contained app's injector runs from the bundle about to go.
-  if (STANDALONE_APP && app === STANDALONE_APP) await stopInjector();
+  // The self-contained app's injector and agent run from the bundle about to go.
+  if (STANDALONE_APP && app === STANDALONE_APP) {
+    await cmdUninstallAgent();
+    await stopInjector();
+  }
   if (!fs.existsSync(app)) {
     console.log(`${app} is not installed`);
     unpinQuietly(app); // a Dock tile can outlive a bundle moved to the Trash
@@ -453,8 +552,29 @@ async function cmdStop() {
   return 0;
 }
 
+// After an uninstall: an NCM still running with the debug port is closed and opened again
+// without it, so it is the original. -> whether it was reopened.
+async function restoreNcm() {
+  const { findNcm, quitNcmQuietly } = await import('../src/launcher.mjs');
+  const ncm = await findNcm();
+  if (!ncm?.port) return false;
+  console.log('reopening NetEase Cloud Music without BetterNCM');
+  // NCM's CEF has no Browser.close
+  if (!(await quitNcmQuietly())) {
+    console.log('NetEase Cloud Music did not quit; quit it and open it again yourself');
+    return false;
+  }
+  await new Promise((r) => setTimeout(r, 500));
+  try { execFileSync('/usr/bin/open', ['-a', NCM_APP]); } catch { /* the user can open it */ }
+  return true;
+}
+
 async function cmdUninstall(values) {
+  // first the agent, which would otherwise start the injector again
+  await cmdUninstallAgent();
   await stopInjector();
+  // before the app goes: this runs from it, and imports what it needs on the way
+  const reopened = await restoreNcm();
 
   const app = appPath(values);
   if (!fs.existsSync(app)) {
@@ -483,8 +603,8 @@ async function cmdUninstall(values) {
   }
 
   console.log('');
-  console.log('NetEase Cloud Music itself was never modified. If it is running, quit it and open it');
-  console.log('again from its own icon: that closes the debug port and starts it without BetterNCM.');
+  console.log('NetEase Cloud Music itself was never modified.');
+  if (!reopened) console.log('If it is running with BetterNCM, quit it and open it again: it then starts without BetterNCM.');
   if (!values.purge) console.log(`Plugins and settings are kept in ${getDataPath()} (uninstall --purge deletes them).`);
   if (!STANDALONE_APP) console.log(`This folder (${PROJECT_ROOT}) can be deleted by hand.`);
   return 0;
@@ -499,7 +619,10 @@ async function main() {
       dest: { type: 'string' },
       purge: { type: 'boolean' },
       dock: { type: 'boolean' },
-      'no-dock': { type: 'boolean' },
+      'no-dock': { type: 'boolean' }, // accepted from older install.sh; the Dock is opt-in now
+      agent: { type: 'boolean' },
+      'no-agent': { type: 'boolean' },
+      replace: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
     },
@@ -531,6 +654,8 @@ async function main() {
     case 'uninstall-app': return cmdUninstallApp(values);
     case 'stop': return cmdStop();
     case 'uninstall': return cmdUninstall(values);
+    case 'install-agent': return cmdInstallAgent();
+    case 'uninstall-agent': return cmdUninstallAgent();
     default: fail(`unknown command: ${cmd}\n\n${USAGE}`);
   }
 }

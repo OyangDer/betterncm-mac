@@ -78,8 +78,10 @@ export function shownError(message) {
   return Object.assign(new Error(message), { alerted: true });
 }
 
-// Graceful quit through Apple Events, then wait for the process to go away.
-export async function quitNcm({ timeout = 15000 } = {}) {
+// Graceful quit through Apple Events, then wait for the process to go away. Without the
+// Automation permission it shows how to grant it (dialog) and throws, or with dialog=false only
+// returns false.
+export async function quitNcm({ timeout = 15000, dialog = true } = {}) {
   const before = await findNcm();
   if (!before) return true;
   log(`asking NCM (pid ${before.pid}) to quit`);
@@ -87,6 +89,7 @@ export async function quitNcm({ timeout = 15000 } = {}) {
   if (r.code !== 0) log('quit via AppleScript failed:', (r.stderr || '').trim());
   // -1743: the user denied (or never answered) the Automation prompt; waiting will not help.
   if (r.code !== 0 && /-1743|not authori[sz]ed/i.test(r.stderr || '')) {
+    if (!dialog) return false;
     await alertDialog(
       'BetterNCM 没有控制网易云音乐的权限，无法让它退出。\n'
       + '请到“系统设置 → 隐私与安全性 → 自动化”，在 node、BetterNCM（或你用的终端）下面打开“网易云音乐”，然后重新打开 BetterNCM。\n\n'
@@ -154,9 +157,22 @@ async function startFresh(preferredPort) {
   return { pid: n?.pid ?? null, port, launched: true };
 }
 
+// Seconds since the process started, from ps's etime ([[dd-]hh:]mm:ss), or null.
+export function parseEtime(s) {
+  const m = /^\s*(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)\s*$/.exec(s || '');
+  if (!m) return null;
+  return ((Number(m[1] || 0) * 24 + Number(m[2] || 0)) * 60 + Number(m[3])) * 60 + Number(m[4]);
+}
+
+export async function processAge(pid) {
+  const r = await run('/bin/ps', ['-o', 'etime=', '-p', String(pid)]);
+  return r.code === 0 ? parseEtime(r.stdout) : null;
+}
+
 // Makes sure NCM runs with a CDP port. With launch=false only attaches to what is there.
+// replace: an NCM without the port is reopened with it without asking (see replaceFreshNcm).
 // -> {pid, port, launched}
-export async function ensureNcm({ preferredPort = 9222, launch = true, port = null } = {}) {
+export async function ensureNcm({ preferredPort = 9222, launch = true, port = null, replace = false } = {}) {
   const running = await findNcm();
 
   if (!launch) {
@@ -172,6 +188,8 @@ export async function ensureNcm({ preferredPort = 9222, launch = true, port = nu
     await verifyNcm(running.port, await waitForCdp(running.port));
     return { pid: running.pid, port: running.port, launched: false };
   }
+
+  if (running && replace) return replaceFreshNcm(running.pid, await pickPort(port || preferredPort));
 
   if (running) {
     const yes = await confirmDialog(
@@ -202,7 +220,7 @@ export async function replaceFreshNcm(pid, port) {
   while (isPidAlive(pid) && Date.now() < deadline) await sleep(50);
   if (isPidAlive(pid) || (await findNcm())) {
     log('NCM did not stop on SIGTERM; asking it to quit');
-    if (!(await quitNcm())) throw new Error('NCM did not quit; not relaunching');
+    if (!(await quitNcm({ dialog: false }))) throw new Error('NCM did not quit; not relaunching');
   }
   await sleep(300);
   await launchNcm(port);
@@ -211,9 +229,24 @@ export async function replaceFreshNcm(pid, port) {
   return { pid: n?.pid ?? null, port, launched: true };
 }
 
+// Ends NCM without asking anyone: the normal quit, or, without the Automation permission (an
+// injector started by the login agent has never asked for it), SIGTERM, which NCM also takes as a
+// quit. -> whether it is gone.
+export async function quitNcmQuietly({ timeout = 15000 } = {}) {
+  const before = await findNcm();
+  if (!before) return true;
+  if (await quitNcm({ timeout, dialog: false })) return true;
+  if (!isPidAlive(before.pid)) return !(await findNcm());
+  log(`quitting NCM (pid ${before.pid}) with SIGTERM`);
+  try { process.kill(before.pid, 'SIGTERM'); } catch { /* gone */ }
+  const deadline = Date.now() + 10000;
+  while (isPidAlive(before.pid) && Date.now() < deadline) await sleep(250);
+  return !isPidAlive(before.pid) && !(await findNcm());
+}
+
 // Used by app.restart: graceful quit, then relaunch with the same port.
 export async function restartNcm(port) {
-  if (!(await quitNcm())) throw new Error('NCM did not quit; not relaunching');
+  if (!(await quitNcmQuietly())) throw new Error('NCM did not quit; not relaunching');
   await sleep(300);
   await launchNcm(port);
   await verifyNcm(port, await waitForCdp(port));
