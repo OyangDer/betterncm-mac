@@ -97,12 +97,23 @@ export function installAgent({ launcher }) {
   const changed = (() => { try { return fs.readFileSync(file, 'utf8') !== text; } catch { return true; } })();
   if (changed) fs.writeFileSync(file, text);
   if (!useLaunchctl()) return { file, changed };
-  // A changed plist is only read again after a bootout.
-  if (changed) launchctl('bootout', `${domain()}/${AGENT_LABEL}`);
-  if (!agentLoaded()) {
-    if (!launchctl('bootstrap', domain(), file)) throw new Error(`launchctl bootstrap ${file} failed`);
+  // A changed plist is only read again after a bootout. launchd still lists the old agent for a
+  // moment after bootout returns (an update once found it "loaded" then and never started the
+  // new one), and a bootstrap in that moment fails: wait for it to go, and try again.
+  if (changed) {
+    launchctl('bootout', `${domain()}/${AGENT_LABEL}`);
+    for (let i = 0; i < 30 && agentLoaded(); i++) sleep(100);
+  }
+  for (let i = 0; !agentLoaded(); i++) {
+    if (launchctl('bootstrap', domain(), file)) continue;
+    if (i >= 4) throw new Error(`launchctl bootstrap ${file} failed`);
+    sleep(500);
   }
   return { file, changed };
+}
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 /** Unloads the agent and removes its plist. -> whether there was one. */
