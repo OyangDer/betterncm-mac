@@ -55,5 +55,5 @@ test('mixed and missing RNPN values map sensibly', () => {
   assert.deepEqual(fromRnp({ 'custom-font': 'true', 'font-family': '["思源黑体","苹方"]' }).fontList, ['思源黑体', '苹方']);
   assert.equal(fromRnp({ 'custom-font': 'false' }).font, 'system');
   assert.deepEqual(fromRnp({ 'custom-font': 'true' }).fontList, DEFAULTS.fontList, 'no RNPN list keeps ours');
-  assert.deepEqual(fromRnp({}), { ...DEFAULTS });
+  assert.equal(fromRnp({}), null, 'no RNPN keys: nothing to seed, the defaults stay');
 });

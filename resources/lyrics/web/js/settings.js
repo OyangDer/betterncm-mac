@@ -90,7 +90,8 @@ export function normalize(input) {
 
 /** RNPN's keys (without the `refined-now-playing-` prefix) to B's settings. */
 export function fromRnp(ls) {
-  if (!ls || typeof ls !== 'object') return null;
+  // no RNPN keys at all (RNPN never ran here): nothing to carry over
+  if (!ls || typeof ls !== 'object' || !Object.keys(ls).length) return null;
   const b = (k) => (ls[k] == null ? undefined : ls[k] === 'true');
   const n = (k) => (ls[k] == null || ls[k] === '' ? undefined : Number(ls[k]));
   const s = {};
