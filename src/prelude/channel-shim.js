@@ -35,6 +35,7 @@ function __bncmInstallChannelShim() {
     try {
       ch.postMessage = function (msg) {
         try { noteRegister(msg); } catch { /* never break the native call */ }
+        try { if (holdWindowSetup(this, orig, msg, arguments)) return undefined; } catch { /* send it as it is */ }
         return orig.apply(this, arguments);
       };
       wrapped = ch.postMessage !== orig;
@@ -60,6 +61,62 @@ function __bncmInstallChannelShim() {
         },
       });
     } catch { /* leave it to the DOMContentLoaded wrap */ }
+  }
+
+  // At every load NCM's page sets its window up: winhelper.setWindowPosition with the saved
+  // windowed frame, showWindow("maximize"), initMainWindow. Done to a window in full screen (a
+  // reload: a plugin switched, BetterNCM restarted) it drops out of full screen half way, left
+  // without its close / minimize / zoom buttons. So on a reload (this window already loaded once:
+  // a flag in sessionStorage) native is asked first whether the window is in full screen; until it
+  // answers these calls wait, and in full screen they are answered here and not sent.
+  const WINDOW_SETUP = new Set(['winhelper.setWindowPosition', 'winhelper.setNativeWindowRect', 'winhelper.initMainWindow']);
+  const LOADED_BEFORE = 'bncm-main-window-loaded';
+  let setupHeld = 'unchecked'; // then [] while native is asked, and 'fullscreen' or null (send them)
+  function isWindowSetup(msg) {
+    // NCM's own calls only (ours, the lyrics window's moves among them, always go)
+    return !!msg && msg.method === 'call' && !String(msg.seq).startsWith(SEQ_PREFIX) && (WINDOW_SETUP.has(msg.command)
+      || (msg.command === 'winhelper.showWindow' && Array.isArray(msg.params) && msg.params[0] === 'maximize'));
+  }
+  // At the first setup call (NCM's callback map exists by then): a reload asks native.
+  function startSetupGuard(ch, orig) {
+    setupHeld = null;
+    let reload = false;
+    try {
+      reload = sessionStorage.getItem(LOADED_BEFORE) === '1';
+      sessionStorage.setItem(LOADED_BEFORE, '1');
+    } catch { /* no sessionStorage: nothing is held */ }
+    const map = callbackMap();
+    if (!reload || !map) return;
+    setupHeld = [];
+    const settle = (fullscreen) => {
+      if (!Array.isArray(setupHeld)) return;
+      const queue = setupHeld;
+      setupHeld = fullscreen ? 'fullscreen' : null;
+      if (fullscreen) {
+        console.debug('[BetterNCM] channel shim: reloaded in full screen; the window is left as it is');
+        setTimeout(() => { setupHeld = null; }, 3000); // the page's start-up only
+      }
+      for (const [msg, args] of queue) {
+        if (fullscreen) answer(msg);
+        else orig.apply(ch, args);
+      }
+    };
+    const s = nextSeq();
+    map[s] = { type: 'call', source: 'bncm', callback: (fullscreen) => settle(!!fullscreen) };
+    orig.call(ch, { method: 'call', command: 'winhelper.isWindowFullScreen', params: [], seq: s });
+    setTimeout(() => settle(false), 1500); // no answer: as if there were no guard
+  }
+  function answer(msg) {
+    try { window.MNBCallback(msg.seq, []); } catch (e) { console.error('[BetterNCM] could not answer ' + msg.command, e); }
+  }
+  // -> true when the call is held or answered here instead of being sent
+  function holdWindowSetup(ch, orig, msg, args) {
+    if (!isWindowSetup(msg)) return false;
+    if (setupHeld === 'unchecked') startSetupGuard(ch, orig);
+    if (setupHeld === null) return false;
+    if (setupHeld === 'fullscreen') answer(msg);
+    else setupHeld.push([msg, args]);
+    return true;
   }
 
   function post(msg) {
