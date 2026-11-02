@@ -10,7 +10,7 @@
 
 ![切换歌词、评论、相似推荐、百科和播放列表](docs/images/demo.gif)
 
-<sub>实机录屏：在歌词、评论、相似推荐、百科和播放列表之间切换。[高清版（MP4）](docs/images/demo.mp4)</sub>
+<sub>实机录屏：在歌词、评论、相似推荐、百科和播放列表之间切换。[60 帧高清版（MP4）](docs/images/demo.mp4)</sub>
 
 ## 需要
 
