@@ -8,7 +8,8 @@ body.bncm-cover-paused #rnp-view .n-single .cdin {
   transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-body.bncm-roaming #rnp-view .am-music-controls .rnp-amll-playlist { display: none !important; }
+/* roaming has one play mode: 减少推荐 takes the mode button's place */
+body.bncm-roaming #rnp-view .am-music-controls .rnp-amll-play-mode { display: none !important; }
 body:not(.bncm-roaming) #rnp-view .am-music-controls .bncm-rnp-dislike { display: none !important; }
 #rnp-view .am-music-controls .bncm-rnp-dislike svg { width: 22px; height: 22px; }
 

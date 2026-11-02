@@ -438,7 +438,8 @@ function addDislike(collapse) {
   btn.setAttribute('aria-label', '减少推荐');
   // NCM's dislike opens a modal inside its own window, which this one covers
   btn.addEventListener('click', (e) => { e.stopPropagation(); send('dislike'); collapse(); });
-  els.controls.append(btn);
+  // in the play mode's place, which roaming has no use for (compat.css swaps the two)
+  els.mode.after(btn);
   watch('dislikeIcon', (svg) => { btn.replaceChildren(...[safeSvg(svg)].filter(Boolean)); });
 }
 
