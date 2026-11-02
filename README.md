@@ -6,6 +6,12 @@
 
 > 非官方项目，与网易云音乐、BetterNCM 官方均无关系。只在 macOS 网易云音乐 **3.1.14** 上测试过。
 
+![歌词窗口](docs/images/lyrics.jpg)
+
+![切换歌词、评论、相似推荐、百科和播放列表](docs/images/demo.gif)
+
+<sub>实机录屏：在歌词、评论、相似推荐、百科和播放列表之间切换。[高清版（MP4）](docs/images/demo.mp4)</sub>
+
 ## 需要
 
 - macOS 11 或更新，Apple 芯片或 Intel 都可以
@@ -71,6 +77,10 @@ BetterNCM 的插件管理和插件市场默认**隐藏**：市场里的插件大
 ## 歌词窗口
 
 点播放栏左下角的封面，打开的是 BetterNCM 自己的歌词窗口，不再是网易云页面里的 RefinedNowPlayingNext（RNPN）。
+
+| 评论 | 播放列表 | 设置 |
+| --- | --- | --- |
+| ![评论](docs/images/comments.jpg) | ![播放列表](docs/images/playlist.jpg) | ![设置](docs/images/settings.jpg) |
 
 **和原来一样的部分**
 - 封面、标题、进度条、控件和歌词的位置、字号、动效，都照着 RNPN 3.0.2 和之前的 Apple Music 风格调整还原。
