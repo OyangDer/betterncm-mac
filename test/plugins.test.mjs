@@ -284,46 +284,10 @@ test('while the plugin manager is hidden, the market is neither seeded nor loade
   assert.match(res.skipped.find((x) => x.file === 'PluginMarket.plugin').reason, /mac\.pluginManager/);
 });
 
-test('the bundled RefinedNowPlayingNext is installed once, and not over another version', () => {
-  resetProfile(false);
-  assert.deepEqual(plugins.seedBundledPlugins(), ['RefinedNowPlayingNext-3.0.2.plugin']);
-  assert.ok(fs.existsSync(path.join(PLUGINS, 'RefinedNowPlayingNext-3.0.2.plugin')));
-  const setLyricsWindow = (v) => {
-    const f = path.join(DP, 'config.json');
-    fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(fs.readFileSync(f, 'utf8')), 'mac.lyricsWindow': v }));
-  };
-  setLyricsWindow('false');
-  assert.ok(plugins.extractPackedPlugins({ ncmVersion: '3.1.14' }).loaded.includes('RefinedNowPlayingNext'));
-  setLyricsWindow('true');
-  // Deleted by the user: stays deleted.
-  fs.rmSync(path.join(PLUGINS, 'RefinedNowPlayingNext-3.0.2.plugin'));
-  assert.deepEqual(plugins.seedBundledPlugins(), []);
-  assert.ok(!fs.existsSync(path.join(PLUGINS, 'RefinedNowPlayingNext-3.0.2.plugin')));
-  // A data dir that already has some version (under any file name) keeps it.
-  resetProfile(false);
-  makeZip(path.join(PLUGINS, 'rnp-own.plugin'), { 'manifest.json': manifestJson({ name: 'RefinedNowPlayingNext', version: '3.1.0' }) });
-  assert.deepEqual(plugins.seedBundledPlugins(), []);
-  assert.deepEqual(fs.readdirSync(PLUGINS), ['rnp-own.plugin']);
-});
-
-test('bundled plugins are not installed over a plugins_dev copy or while config.json is broken', () => {
-  resetProfile(false);
-  fs.mkdirSync(path.join(DEV, 'my-rnp'), { recursive: true });
-  fs.writeFileSync(path.join(DEV, 'my-rnp', 'manifest.json'), manifestJson({ name: 'RefinedNowPlayingNext' }));
-  assert.deepEqual(plugins.seedBundledPlugins(), []);
-  assert.deepEqual(fs.readdirSync(PLUGINS), []);
-
-  resetProfile(false);
-  const broken = '{"mac.rnpAppleStyle": "false",}';
-  fs.writeFileSync(path.join(DP, 'config.json'), broken);
-  assert.deepEqual(plugins.seedBundledPlugins(), []);
-  assert.deepEqual(fs.readdirSync(PLUGINS), []);
-  assert.equal(fs.readFileSync(path.join(DP, 'config.json'), 'utf8'), broken, 'left for the user to fix');
-});
-
 test('the lyrics window keeps RefinedNowPlayingNext out, and turning it off brings it back', () => {
   resetProfile(false);
-  plugins.seedBundledPlugins();
+  // not bundled any more: a copy the user installed
+  makeZip(path.join(PLUGINS, 'rnp-own.plugin'), { 'manifest.json': manifestJson({ name: 'RefinedNowPlayingNext', version: '3.0.2' }), 'main.js': '' });
   const res = plugins.extractPackedPlugins({ ncmVersion: '3.1.14' });
   assert.ok(!res.loaded.includes('RefinedNowPlayingNext'));
   assert.ok(res.skipped.some((s) => /lyrics window/.test(s.reason)));

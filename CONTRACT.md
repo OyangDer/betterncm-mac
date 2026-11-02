@@ -51,7 +51,7 @@ Mac-only config keys, with these defaults:
 | `mac.rnpAutoLyricSize` | `'true'` (runs `compat-rnp-lyric-size.js`) |
 | `mac.pluginManager` | `'false'` (not `'true'`: runs `hide-plugin-manager.js`; PluginMarket is neither seeded nor loaded) |
 
-Not in the defaults (so not in `__BNCM_CFG__`): `mac.ncmApp` (NCM bundle path), `mac.warnedNcmVersion` (last untested version warned about) and `mac.seeded.<plugin>` (`'true'` once a bundled plugin from `resources/` was offered to this data dir; see `seedBundledPlugins` in src/plugins.mjs).
+Not in the defaults (so not in `__BNCM_CFG__`): `mac.ncmApp` (NCM bundle path), `mac.warnedNcmVersion` (last untested version warned about). (`mac.seeded.RefinedNowPlayingNext` may still be in older data dirs; nothing reads it since RefinedNowPlayingNext stopped being bundled.)
 
 ## src/fsapi.mjs (owner: server)
 

@@ -12,7 +12,7 @@ import { connectBrowser } from './cdp.mjs';
 import { alertDialog, ensureNcm, findNcm, isPidAlive, replaceFreshNcm, restartNcm, waitForCdp } from './launcher.mjs';
 import { buildInjection } from './bundle.mjs';
 import { startServer } from './server.mjs';
-import { seedBundledPlugins, seedPluginMarket, extractPackedPlugins, collectHijacks, collectStartupScripts } from './plugins.mjs';
+import { seedPluginMarket, extractPackedPlugins, collectHijacks, collectStartupScripts } from './plugins.mjs';
 import { openDevtools } from './macos.mjs';
 import { createLyricsRelay, isBridgeContext, lyricsWindowEnabled } from './lyrics-window.mjs';
 
@@ -134,7 +134,6 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
     log('cannot write state.json:', e.message);
   }
 
-  try { seedBundledPlugins(); } catch (e) { log('seedBundledPlugins failed:', e); }
   try { seedPluginMarket(); } catch (e) { log('seedPluginMarket failed:', e); }
   try { logExtraction(extractPackedPlugins()); } catch (e) { log('extractPackedPlugins failed:', e); }
 

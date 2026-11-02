@@ -64,12 +64,12 @@ node bin/bncm-mac.mjs install-app --dock
 网易云右上角的**插件**按钮（设置按钮旁边，拼图图标）打开一个小面板：
 
 - 每个插件一个开关。关掉的插件不再加载（记在数据文件夹的 `disable_list.txt` 里）；面板关上时网易云的页面刷新一次，改动随之生效。
-- 第一行“歌词窗口”是 BetterNCM 自带的歌词页，关掉就换回 RefinedNowPlayingNext，页面马上刷新。
+- 第一行“歌词窗口”是 BetterNCM 自带的歌词页，关掉就改用网易云原版的播放页（装了 RefinedNowPlayingNext 的话用它），页面马上刷新。
 - 最下面是“卸载 BetterNCM”，确认后会[卸载](#卸载)，网易云关闭并以原版重新打开。
 
 点播放栏左下角的封面，打开的是 BetterNCM 自己的[歌词窗口](#歌词窗口)。它照着 RefinedNowPlayingNext 的歌词页做，但耗电少得多。
 
-另外自带 **RefinedNowPlayingNext** 3.0.2，在[换回它](#歌词窗口)时才会加载，第一次打开时自动装好：它把正在播放页换成了更好看的歌词页。网易云自己打开的正在播放页（比如进入“漫游”时）也会换成它；漫游时它的控制栏里会出现“减少推荐”按钮，替代用不上的播放列表按钮。BetterNCM 的 Mac 适配就是对着这个版本做的。它的“专辑封面清晰度”默认调到最高（800），在 Retina 屏上封面不会糊；在它的设置里改过的话，按你改的来。如果你已经装过某个版本的 RefinedNowPlayingNext，就用你的那个，不会覆盖；删掉它之后也不会再自动装回来。
+如果你自己装了 **RefinedNowPlayingNext**（RNPN），关掉“歌词窗口”后会用它；BetterNCM 的 Mac 适配是对着它的 3.0.2 版做的。没装的话，关掉后就是网易云原版的播放页。
 
 BetterNCM 的插件管理和插件市场默认**隐藏**：市场里的插件大多数在 Mac 上用不了（2026 年 11 月统计：87 个里 58 个不支持网易云 3.x；支持 3.x 的 29 个里，约 15 个依赖 Windows 的 DLL 或程序，或者只认旧版界面）。想自己折腾，在设置里加上 `"mac.pluginManager": "true"`，然后运行 [`reload` 命令](#命令)或重启网易云，右上角设置按钮旁边就会出现 BetterNCM 按钮，里面有插件管理和插件市场。以前从插件市场装过的插件，隐藏后照样加载，只是没有了管理它们的界面。插件市场默认从 GitHub 下载；连不上 GitHub 时，会自动改从 jsDelivr 镜像下载。
 
@@ -107,7 +107,7 @@ BetterNCM 的插件管理和插件市场默认**隐藏**：市场里的插件大
 - 按住 Shift 点封面：打开网易云自己的播放页。
 - 收藏到歌单、下载、分享、减少推荐等需要网易云弹窗的操作，会先收起歌词窗口，再在网易云里打开。
 
-**换回 RNPN**：在网易云右上角的[插件](#插件)面板里关掉“歌词窗口”。也可以在设置里加上 `"mac.lyricsWindow": "false"`。
+**不用歌词窗口**：在网易云右上角的[插件](#插件)面板里关掉“歌词窗口”，就改用网易云原版的播放页（装了 RNPN 的话用 RNPN）。也可以在设置里加上 `"mac.lyricsWindow": "false"`。
 
 ## 高级设置
 
@@ -124,9 +124,9 @@ BetterNCM 的插件管理和插件市场默认**隐藏**：市场里的插件大
 
 | 配置 | 作用 |
 |---|---|
-| `mac.rnpAppleStyle` | （只在换回 RNPN 时有用）让 RefinedNowPlayingNext 更像 Apple Music：歌词栏更窄，封面更大，封面和控件稍微下移，音量变成“···”旁边的小按钮（鼠标放上去展开），暂停时封面缩小；右上角的 × 换成常驻的向下收起箭头，设置和歌词复制模式按钮移到它旁边，只在鼠标靠近时出现；“···”菜单换成 Apple Music 那样的半透明菜单；歌词右侧的“译 / 音 / 逐字”开关和其他按钮统一成圆形样式；中文翻译比原文小一号（歌词越大缩得越多），不再显得比原文还重；右上角设置按钮旁边多了一个小图标（和设置一样，鼠标靠近右上角才出现），鼠标放上去向左展开成歌词、百科、相似推荐、评论四个，点哪个就切到哪个；内容就是网易云自己的（点赞、回复、发评论、播放相似歌曲都照常能用），配色跟着封面走；在封面一侧往下滚动也能打开评论，评论已经在顶部时再往上滑一下就回到歌词（快速往上划到顶的惯性不算，不会误跳） |
+| `mac.rnpAppleStyle` | （只在自己装了 RNPN、又关掉歌词窗口时有用）让 RefinedNowPlayingNext 更像 Apple Music：歌词栏更窄，封面更大，封面和控件稍微下移，音量变成“···”旁边的小按钮（鼠标放上去展开），暂停时封面缩小；右上角的 × 换成常驻的向下收起箭头，设置和歌词复制模式按钮移到它旁边，只在鼠标靠近时出现；“···”菜单换成 Apple Music 那样的半透明菜单；歌词右侧的“译 / 音 / 逐字”开关和其他按钮统一成圆形样式；中文翻译比原文小一号（歌词越大缩得越多），不再显得比原文还重；右上角设置按钮旁边多了一个小图标（和设置一样，鼠标靠近右上角才出现），鼠标放上去向左展开成歌词、百科、相似推荐、评论四个，点哪个就切到哪个；内容就是网易云自己的（点赞、回复、发评论、播放相似歌曲都照常能用），配色跟着封面走；在封面一侧往下滚动也能打开评论，评论已经在顶部时再往上滑一下就回到歌词（快速往上划到顶的惯性不算，不会误跳） |
 | `mac.stopMiniVinyl` | 让播放栏左下角的小黑胶不再转圈，稍微省电（默认关闭，小黑胶照常转） |
-| `mac.rnpAutoLyricSize` | （只在换回 RNPN 时有用）歌词字号跟着窗口大小变：RefinedNowPlayingNext 设置里的“字体大小”当作全屏时的字号，窗口变小就按比例缩小（最小一半，不小于 16px） |
+| `mac.rnpAutoLyricSize` | （只在自己装了 RNPN、又关掉歌词窗口时有用）歌词字号跟着窗口大小变：RefinedNowPlayingNext 设置里的“字体大小”当作全屏时的字号，窗口变小就按比例缩小（最小一半，不小于 16px） |
 
 ### 其他
 
@@ -134,7 +134,7 @@ BetterNCM 的插件管理和插件市场默认**隐藏**：市场里的插件大
 
 | 配置 | 作用 |
 |---|---|
-| `mac.lyricsWindow` | 默认 `"true"`：用 BetterNCM 自己的[歌词窗口](#歌词窗口)；设成 `"false"` 换回网页里的 RefinedNowPlayingNext |
+| `mac.lyricsWindow` | 默认 `"true"`：用 BetterNCM 自己的[歌词窗口](#歌词窗口)；设成 `"false"` 改用网易云原版的播放页（装了 RefinedNowPlayingNext 的话用它） |
 | `mac.pluginManager` | 设成 `"true"` 显示 BetterNCM 的插件管理和插件市场（默认隐藏，见[插件](#插件)） |
 | `mac.ncmApp` | 网易云不在“应用程序”里时，填它的 `.app` 完整路径 |
 | `mac.cdpPort` | 调试端口，默认 `9222`，被占用时自动换一个 |
@@ -242,10 +242,10 @@ npmmirror 一般几分钟内自动同步；想马上同步，打开 https://npmm
 - [BetterNCM/js-framework](https://github.com/BetterNCM/js-framework)：BetterNCM 的页面端框架。`framework/` 和 `dist/framework.js` 来自它，为 macOS 做了修改，改动见 [patches/js-framework-mac.patch](patches/js-framework-mac.patch)。
 - [BetterNCM/Plugin-Market](https://github.com/BetterNCM/Plugin-Market)：插件市场。`resources/PluginMarket.plugin` 是它的打包版本。
 - [BetterNCM/BetterNCM-Packed-Plugins](https://github.com/BetterNCM/BetterNCM-Packed-Plugins)：插件仓库。
-- [solstice23](https://github.com/solstice23/refined-now-playing-netease)（RefinedNowPlaying）和 [SUlTlUS / MiHN](https://github.com/SUlTlUS/refined-now-playing-netease-next)（RefinedNowPlayingNext）：`resources/RefinedNowPlayingNext-3.0.2.plugin` 是它在插件市场里的打包版本，随附 MIT 协议（[resources/RefinedNowPlayingNext-LICENSE.txt](resources/RefinedNowPlayingNext-LICENSE.txt)）；`src/prelude/compat-rnp-*.js` 是针对它的兼容和外观调整。
+- [solstice23](https://github.com/solstice23/refined-now-playing-netease)（RefinedNowPlaying）和 [SUlTlUS / MiHN](https://github.com/SUlTlUS/refined-now-playing-netease-next)（RefinedNowPlayingNext）：歌词窗口的界面设计和图标来自 RefinedNowPlayingNext 3.0.2，MIT 协议（[resources/RefinedNowPlayingNext-LICENSE.txt](resources/RefinedNowPlayingNext-LICENSE.txt)）；`src/prelude/compat-rnp-*.js` 是针对它的兼容和外观调整。
 - [Steve-xmh/mmbncm](https://github.com/Steve-xmh/mmbncm)：网易云 2.x 时代的 macOS BetterNCM 方案。
 - [npm/node-semver](https://github.com/npm/node-semver)：随附在 `vendor/semver/`（ISC 协议）。
 
 ## 协议
 
-[GPL-3.0](LICENSE)，与它所基于的 js-framework、Plugin-Market 一致。`vendor/semver/` 使用其自带的 ISC 协议，随附的 RefinedNowPlayingNext 使用 MIT 协议。
+[GPL-3.0](LICENSE)，与它所基于的 js-framework、Plugin-Market 一致。`vendor/semver/` 使用其自带的 ISC 协议，歌词窗口里来自 RefinedNowPlayingNext 的设计和图标使用 MIT 协议。
