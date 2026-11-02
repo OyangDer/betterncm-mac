@@ -1,4 +1,4 @@
-// The top-right tool row (settings and the collapse chevron, in RNPN's row; copy mode is in 设置)
+// The top-right tool row (text colour, settings and the collapse chevron, in RNPN's row; copy mode is in 设置)
 // and the views switcher (歌词 / 百科 / 相似推荐 / 评论 / 播放列表, from compat-rnp-panels.js). The
 // switcher sits in the playback controls, where RNPN's playlist button was, and opens rightward
 // (upward when the lyric column leaves no room); with the controls hidden it goes back to the top
@@ -48,6 +48,20 @@ export function mountTools({ collapse }) {
     settingsBtn.classList.toggle('bncm-on', !!open);
   });
   document.addEventListener('bncm-settings-closed', () => settingsBtn?.classList.remove('bncm-on'));
+
+  // 文字颜色 in one click: white and black text swap (from 跟随系统, to the opposite of what shows)
+  const schemeBtn = tools.querySelector('.bncm-top-scheme');
+  schemeBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    lazy('./settings.js', 'update', { scheme: state.scheme === 'dark' ? 'light' : 'dark' });
+  });
+  const schemeTip = (v) => {
+    const tip = v === 'dark' ? '文字颜色：白色（点按换成黑色）' : '文字颜色：黑色（点按换成白色）';
+    schemeBtn?.setAttribute('title', tip);
+    schemeBtn?.setAttribute('aria-label', tip);
+  };
+  schemeTip(state.scheme);
+  watch('scheme', schemeTip);
 
   switcher = tools.querySelector('#bncm-rnp-views');
   for (const v of VIEWS) {

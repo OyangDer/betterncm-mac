@@ -76,7 +76,7 @@ const GROUPS = [
     id: 'look', label: '外观', sections: [
       {
         rows: [
-          { type: 'seg', k: 'scheme', label: '颜色模式', options: SEG([['auto', '跟随系统'], ['dark', '深色'], ['light', '浅色']]) },
+          { type: 'seg', k: 'scheme', label: '文字颜色', help: '白色接近 Apple Music，右上角可切换', options: SEG([['auto', '跟随系统'], ['dark', '白色'], ['light', '黑色']]) },
           { type: 'seg', k: 'accent', label: '主题色', help: '从封面取色', options: SEG([['off', '关'], ['primary', '鲜艳'], ['secondary', '柔和'], ['tertiary', '偏色']]) },
           { type: 'seg', k: 'textEffect', label: '文字效果', help: '辉光使用主题色', options: SEG([['none', '无'], ['shadow', '阴影'], ['glow', '辉光']]) },
         ],
