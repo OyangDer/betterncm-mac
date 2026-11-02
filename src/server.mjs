@@ -493,14 +493,19 @@ export async function startServer({ apiKey, hooks = {} }) {
     },
     // The plugin panel in NCM's title bar (prelude/plugin-button.js). The lyrics window, which is
     // BetterNCM's own and replaces RefinedNowPlayingNext, comes first.
-    '/internal/plugins': (_q, res) => sendJson(res, {
-      version: MAC_VERSION,
-      plugins: [
-        { slug: LYRICS_WINDOW_SLUG, name: '歌词窗口', version: '', author: '', builtin: true, dev: false,
-          description: 'BetterNCM 自带的歌词页，关掉后改用 RefinedNowPlayingNext', enabled: readConfigKey('mac.lyricsWindow') === 'true', note: '' },
-        ...listInstalledPlugins(),
-      ],
-    }),
+    '/internal/plugins': (_q, res) => {
+      const installed = listInstalledPlugins();
+      const rnpn = installed.some((p) => p.name === 'RefinedNowPlayingNext');
+      sendJson(res, {
+        version: MAC_VERSION,
+        plugins: [
+          { slug: LYRICS_WINDOW_SLUG, name: '歌词窗口', version: '', author: '', builtin: true, dev: false,
+            description: `BetterNCM 自带的歌词页，关掉后改用${rnpn ? ' RefinedNowPlayingNext' : '网易云原版的播放页'}`,
+            enabled: readConfigKey('mac.lyricsWindow') === 'true', note: '' },
+          ...installed,
+        ],
+      });
+    },
   };
 
   const POST = {
