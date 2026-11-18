@@ -66,6 +66,13 @@ export function isInsideDataPath(abs) {
   return within(physicalPath(abs), physicalPath(getDataPath()));
 }
 
+// A name as a case-insensitive APFS volume compares it. Its case folding also takes "ſ" (U+017F)
+// for "s" and the Kelvin sign (U+212A) for "k", which toLowerCase alone leaves: "config.jſon"
+// opens config.json.
+export function foldName(x) {
+  return String(x).normalize('NFKD').toLowerCase();
+}
+
 function denied(msg) {
   const e = new Error(msg);
   e.code = 'EBNCMDENIED';
@@ -79,10 +86,10 @@ function guardWrite(abs, what, followLast = true) {
   const phys = physicalPath(abs, followLast);
   const root = physicalPath(getDataPath());
   const rel = within(phys, root) ? phys.slice(root.length + 1) : null;
-  // APFS is case-insensitive by default, so the hard denials compare in lower case.
-  const lc = (x) => x.toLowerCase();
+  // APFS is case-insensitive by default, so the hard denials compare folded names.
+  const lc = foldName;
   if (within(lc(phys), lc(physicalPath(NCM_APP)))) throw denied(`${what} inside ${NCM_APP} is never allowed: ${abs}`);
-  if (rel != null && (/^config\.json/i.test(rel) || within(lc(rel), 'run'))) throw denied(`${what} ${rel} through the fs API is not allowed: ${abs}`);
+  if (rel != null && (lc(rel).startsWith('config.json') || within(lc(rel), 'run'))) throw denied(`${what} ${rel} through the fs API is not allowed: ${abs}`);
   if (rel == null && readConfigKey('mac.allowFsOutsideData', 'false') !== 'true') {
     throw denied(`${what} outside the BetterNCM data directory is not allowed (set mac.allowFsOutsideData=true): ${abs}`);
   }

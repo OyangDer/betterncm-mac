@@ -286,6 +286,7 @@ function installLyricsBridge() {
   // store changes before NCM's window has its new size, so the frame goes once the resizing settles,
   // or after FS_WAIT_MS at most: NCM's page is hidden behind the lyrics window, so a resize may never
   // come and frame() may be stale (the host reads NCM's real bounds itself on leaving full screen).
+  let fsRetryTimer = 0; // setFullscreen's second ask
   let fsTimer = 0;
   let fsDeadline = 0;
   let fsResize = null; // the pending report's listener: a second flip replaces it
@@ -792,9 +793,11 @@ function installLyricsBridge() {
     setFullscreen: (m) => {
       const v = !!m.v;
       winCall('winhelper.setWindowFullScreen', [v]);
-      // a zoomed NCM window only un-zooms on the first call; ask again once that is done
+      // a zoomed NCM window only un-zooms on the first call; ask again once that is done, unless
+      // the user has asked for something else by then
+      clearTimeout(fsRetryTimer);
       if (v) {
-        setTimeout(() => window.channel?.call('winhelper.isWindowFullScreen', (fs) => {
+        fsRetryTimer = setTimeout(() => window.channel?.call('winhelper.isWindowFullScreen', (fs) => {
           if (!fs) winCall('winhelper.setWindowFullScreen', [true]);
         }, []), FS_RETRY_MS);
       }

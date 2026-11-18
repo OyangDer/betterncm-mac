@@ -143,7 +143,7 @@ async function start() {
   document.querySelector('#rnp-view .rnp-control-thumb')?.addEventListener('click', collapse);
   // RNPN shows the bottom handle when the pointer is near the bottom edge
   document.addEventListener('mousemove', (e) => {
-    document.body.classList.toggle('rnp-control-thumb-visible', innerHeight - e.clientY < 80);
+    document.querySelector('#rnp-view')?.classList.toggle('rnp-control-thumb-visible', innerHeight - e.clientY < 80);
   }, { passive: true });
   window.addEventListener('resize', () => layoutSide());
   host('ready');

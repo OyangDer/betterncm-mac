@@ -176,6 +176,9 @@ test('config.json, run/ and the NCM app are off limits even with allowFsOutsideD
     assert.throws(() => fsapi.writeFileText('./run/state.json', '{}'), (e) => e.code === 'EBNCMDENIED');
     assert.throws(() => fsapi.writeFileText('./Config.JSON', '{}'), (e) => e.code === 'EBNCMDENIED');
     assert.throws(() => fsapi.writeFileText('./RUN/state.json', '{}'), (e) => e.code === 'EBNCMDENIED');
+    // APFS folds "ſ" (U+017F) to "s": these names open config.json and the app
+    assert.throws(() => fsapi.writeFileText('./config.j\u017Fon', '{}'), (e) => e.code === 'EBNCMDENIED');
+    assert.throws(() => fsapi.mkdir('/Applications/Netea\u017FeMusic.app/Contents/x'), (e) => e.code === 'EBNCMDENIED');
     assert.throws(() => fsapi.mkdir('/applications/neteasemusic.app/Contents/x'), (e) => e.code === 'EBNCMDENIED');
     assert.throws(() => fsapi.mkdir('/Applications/NeteaseMusic.app/Contents/x'), (e) => e.code === 'EBNCMDENIED');
     assert.throws(() => fsapi.writeFileText('/Applications/NeteaseMusic.app/Contents/MacOS/../Resources/x', ''), (e) => e.code === 'EBNCMDENIED');

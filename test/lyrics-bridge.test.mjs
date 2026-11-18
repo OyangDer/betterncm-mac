@@ -599,6 +599,20 @@ test('the window follows NCM\'s full screen: setFullscreen asks NCM, and a chang
   assert.deepEqual(p.nativeCalls, [['winhelper.bringWindowToTop', []]]);
 });
 
+test('setFullscreen asks again once for a zoomed window, but not after the user has turned it off', () => {
+  const p = load();
+  p.boot();
+  p.cmd({ c: 'setFullscreen', v: true });
+  p.advance(2000);
+  assert.deepEqual(p.nativeCalls.map((c) => c[0]), ['winhelper.setWindowFullScreen', 'winhelper.isWindowFullScreen']);
+  p.nativeCalls.length = 0;
+  p.cmd({ c: 'setFullscreen', v: true });
+  p.advance(300);
+  p.cmd({ c: 'setFullscreen', v: false });
+  p.advance(2000);
+  assert.deepEqual(p.nativeCalls, [['winhelper.setWindowFullScreen', [true]], ['winhelper.setWindowFullScreen', [false]]]);
+});
+
 test('a full-screen flip that comes back before it settled reports only the last state, with one resize listener', () => {
   const p = load();
   p.boot();

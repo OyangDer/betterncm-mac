@@ -551,13 +551,18 @@ export async function runInjector({ mode = 'launch', port = null, notify = false
     });
     cdpPort = ncm.port;
     ncmPid = ncm.pid;
-    saveState();
-    await attachBrowser();
-    saveState();
-
-    lastFingerprint = injectionFingerprint();
-    fs.watchFile(path.join(getDataPath(), 'config.json'), { interval: 1000 }, onConfigFileChange);
-    watchDevPlugins();
+    // A stop that came while NCM was being found or opened has closed the server and removed
+    // state.json: nothing is injected with that server's port, and no state is written again.
+    if (!shuttingDown) {
+      saveState();
+      await attachBrowser();
+    }
+    if (!shuttingDown) {
+      saveState();
+      lastFingerprint = injectionFingerprint();
+      fs.watchFile(path.join(getDataPath(), 'config.json'), { interval: 1000 }, onConfigFileChange);
+      watchDevPlugins();
+    }
   } catch (e) {
     log('startup failed:', e.message);
     if (notify && !e.alerted && !e.userCancelled) await failureDialog('BetterNCM 启动失败。', e);

@@ -181,7 +181,7 @@ function staticFile(root, relUrlPath) {
 
 // /local must never expose the config, the run state (holds the API key) or the logs.
 function localDenied(segs) {
-  const first = (segs[0] ?? '').toLowerCase();
+  const first = fsapi.foldName(segs[0] ?? '');
   return first === 'run' || first === 'log' || /^\.?config\.json/.test(first);
 }
 

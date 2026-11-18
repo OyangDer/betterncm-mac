@@ -21,7 +21,7 @@ const QUICK_DEATHS = 3;
 // Commands only the injector sends (LYRICS-WINDOW.md); the window's page may not.
 const INJECTOR_ONLY = new Set(['detach', 'fallback', 'setFullscreen', 'showNcm', 'minimizeNcm', 'active']);
 // What the bridge posts; anything else (the host's own host.* messages above all) is not passed on.
-const BRIDGE_TYPES = new Set(['hello', 'open', 'snapshot', 'track', 'state', 'progress', 'liked', 'mode', 'volume', 'roaming', 'reply', 'fullscreen']);
+const BRIDGE_TYPES = new Set(['hello', 'open', 'snapshot', 'track', 'state', 'progress', 'liked', 'mode', 'volume', 'roaming', 'queueChanged', 'reply', 'fullscreen']);
 // Asks a page's bridge to say hello again: its first hello can come before the binding is there
 // (an injector attaching to a running NCM, or re-registering after a config change).
 const HELLO = `window.__bncmLyricsBridge ? window.__bncmLyricsBridge.cmd({ c: 'hello' }) : '${NO_BRIDGE}'`;
@@ -148,6 +148,9 @@ export function createLyricsRelay({ getCdp, fromBridgeContext = () => false, roo
         onHost(msg);
       }
     });
+    // A write to a host that just died fails later, as an 'error' event (EPIPE): unheard, it would
+    // take the injector down. Its 'exit' says the rest.
+    child.stdin?.on?.('error', (e) => log('lyrics: write to host failed:', e.message));
     let ebuf = '';
     child.stderr?.setEncoding?.('utf8');
     child.stderr?.on('data', (chunk) => {

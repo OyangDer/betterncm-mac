@@ -418,8 +418,8 @@ function syncGlow(wd, start, dur, t) {
     a.pause();
     a.currentTime = 0;
     if (state.playing) { clearTimeout(wd.glowTimer); wd.glowTimer = setTimeout(() => { if (state.playing) a.play(); }, start - t); }
-  } else if (state.playing) a.play();
-  else a.pause();
+  } else if (state.playing && t - start < D) a.play();
+  else a.pause(); // also a finished glow: play() would start it over
 }
 
 function leaveLine(entry) {

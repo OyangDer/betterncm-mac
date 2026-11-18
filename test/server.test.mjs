@@ -319,6 +319,7 @@ test('/local serves the data dir but never config.json, run/, log/ or ..', async
   assert.equal(await ok.text(), 'body{}');
   assert.equal((await fetch(base + '/local/config.json')).status, 403);
   assert.equal((await fetch(base + '/local/CONFIG.JSON')).status, 403);
+  assert.equal((await fetch(base + '/local/config.j%C5%BFon')).status, 403); // "ſ", which APFS folds to "s"
   assert.equal((await fetch(base + '/local/run/state.json')).status, 403);
   assert.equal((await fetch(base + '/local/Run/state.json')).status, 403);
   assert.equal((await fetch(base + '/local/log/injector.log')).status, 403);

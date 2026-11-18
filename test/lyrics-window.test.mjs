@@ -51,11 +51,11 @@ function fakeHost() {
   child.stdout.setEncoding = () => {};
   child.stderr = new EventEmitter();
   child.stderr.setEncoding = () => {};
-  child.stdin = {
+  child.stdin = Object.assign(new EventEmitter(), {
     writable: true,
     write: (s) => { for (const l of s.split('\n').filter(Boolean)) child.lines.push(JSON.parse(l)); return true; },
     end: () => { child.stdin.writable = false; },
-  };
+  });
   child.kill = () => { child.killed = true; };
   child.say = (obj) => child.stdout.emit('data', JSON.stringify(obj) + '\n');
   return child;
@@ -210,8 +210,8 @@ test('only what the bridge sends is passed on, never the host\'s own messages', 
   fromBridge({ t: 'whatever' });
   fromBridge({ c: 'toggle' });
   assert.equal(h.lines.length, n);
-  for (const t of ['snapshot', 'track', 'state', 'progress', 'liked', 'mode', 'volume', 'roaming', 'reply']) fromBridge({ t });
-  assert.deepEqual(h.lines.slice(n).map((l) => l.msg.t), ['snapshot', 'track', 'state', 'progress', 'liked', 'mode', 'volume', 'roaming', 'reply']);
+  for (const t of ['snapshot', 'track', 'state', 'progress', 'liked', 'mode', 'volume', 'roaming', 'queueChanged', 'reply']) fromBridge({ t });
+  assert.deepEqual(h.lines.slice(n).map((l) => l.msg.t), ['snapshot', 'track', 'state', 'progress', 'liked', 'mode', 'volume', 'roaming', 'queueChanged', 'reply']);
 });
 
 test('only the session that said hello is the bridge', async () => {
@@ -359,6 +359,12 @@ test('the host exiting makes the bridge inactive, and the next open starts a new
   await tick();
   assert.equal(hosts.length, 2);
   assert.equal(relay.isOpen, true);
+});
+
+test('a write that fails after the host died (EPIPE) does not throw', async () => {
+  const { hosts, openWindow } = setup();
+  await openWindow();
+  assert.doesNotThrow(() => hosts[0].stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })));
 });
 
 test('when the host cannot start, NCM opens its own page', async () => {
