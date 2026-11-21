@@ -22,6 +22,9 @@ const COLLAPSE = '[data-testid="tid_vinyl_unfold_btn"], .close button';
 const DISLIKE_BTN = 'footer [data-testid="tid_fmdislike_btn"]';
 const PLAYLIST_BTN = 'footer [data-testid="tid_playbar_playlist_btn"]';
 const PROGRESS_MS = 250;
+// NCM sends progress 30-50 times a second while it plays. Past this without one, it is not
+// advancing (stalled, or the Mac slept with the state still "playing"): the position is not run on.
+const PROGRESS_RUN_MAX_MS = 1000;
 const CHECK_DELAY_MS = 30;
 const STOCK_GRACE_MS = 1500; // a shift-click that opened nothing stops letting NCM's page through
 const OPEN_ANSWER_MS = 1500; // the injector answers an open at once; without an answer NCM's page opens
@@ -363,7 +366,8 @@ function installLyricsBridge() {
     if (!pr) return;
     const now = performance.now();
     progSentAt = now;
-    post({ t: 'progress', id: pr.id, pos: pr.pos + (readPlaying() ? (now - pr.at) / 1000 : 0), wall: Date.now(), force: !!force });
+    const run = readPlaying() ? Math.min(now - pr.at, PROGRESS_RUN_MAX_MS) : 0;
+    post({ t: 'progress', id: pr.id, pos: pr.pos + run / 1000, wall: Date.now(), force: !!force });
   }
 
   function onProgress(args) {

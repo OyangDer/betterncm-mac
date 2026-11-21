@@ -414,6 +414,27 @@ test('activating sends a snapshot and progress; progress goes at 4 Hz with jumps
   assert.deepEqual(p.posts, []);
 });
 
+test('a position NCM stopped sending is not run on for the time since (a night of sleep)', () => {
+  const p = load();
+  p.boot();
+  p.cmd({ c: 'active', v: true });
+  p.emit('audioplayer.onPlayState', ['1810227452', '1810227452|resume', 1]);
+  p.progress(30);
+  p.cmd({ c: 'drawn', v: false });
+  p.advance(8 * 3600 * 1000); // still "playing", no progress
+  p.posts.length = 0;
+  p.cmd({ c: 'drawn', v: true });
+  const [pr] = p.ofType('progress');
+  assert.ok(pr.pos >= 30 && pr.pos <= 31, `run on at most a second, got ${pr.pos}`);
+  // and reopened
+  p.cmd({ c: 'active', v: false });
+  p.advance(8 * 3600 * 1000);
+  p.posts.length = 0;
+  p.cmd({ c: 'active', v: true });
+  const [pr2] = p.ofType('progress');
+  assert.ok(pr2.pos >= 30 && pr2.pos <= 31, `run on at most a second, got ${pr2.pos}`);
+});
+
 test('advancing progress counts as playing when no play-state event has come', () => {
   const p = load();
   p.boot();

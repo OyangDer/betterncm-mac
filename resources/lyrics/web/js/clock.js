@@ -9,9 +9,13 @@ let at = performance.now();
 let id = '';
 let seekCounter = 0;
 const listeners = new Set();
+// Progress comes four times a second while playing; past this without one the position stops
+// (the bridge holding it, NCM stalled, or a night of sleep with the state still "playing", which
+// performance.now() counts) until the next message sets it again.
+const RUN_MAX_MS = 2000;
 
 export function now() {
-  return last + (state.playing ? performance.now() - at : 0);
+  return last + (state.playing ? Math.min(performance.now() - at, RUN_MAX_MS) : 0);
 }
 
 export function trackId() { return id; }
