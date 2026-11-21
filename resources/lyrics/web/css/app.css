@@ -60,6 +60,9 @@ body.bncm-motion-paused #rnp-view .n-single .mn .title .name.scroll .name-marque
 /* RNPN's cover spinner is an animated SVG mask that WebKit redraws every frame even at opacity 0:
    out of rendering except while loading and its fade-out (bncm-spin, side.js). */
 #rnp-view .n-single .cdimg:not(.loading):not(.bncm-spin)::before { display: none; }
+/* RNPN's loading veil (.cdimg::after): WebKit does not clip a backdrop-filter to its parent's
+   rounded overflow, so its square corners (2px past the cover) showed while a cover loaded. */
+#rnp-view .n-single .cdimg::after { inset: 0; border-radius: inherit; }
 /* A cover that could not be downloaded leaves the image out (side.js renderCover). */
 #rnp-view .n-single .cdimg img[hidden] { display: none !important; }
 
