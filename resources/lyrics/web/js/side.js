@@ -311,19 +311,13 @@ function applyCoverSettings() {
   b.toggle('horizontal-align-left', !center);
   b.toggle('vertical-align-middle', center);
   b.toggle('vertical-align-bottom', !center);
-  // RNPN's colourful cover shadow (St, B@332692): a blurred copy of the cover under it
-  let st = document.getElementById('bncm-cover-shadow');
-  if (!st) { st = document.createElement('style'); st.id = 'bncm-cover-shadow'; document.head.append(st); }
-  // the url goes in as a custom property, never into the stylesheet text, and only from our own schemes
+  // RNPN's colourful cover shadow (St, B@332692): a blurred copy of the cover under it (app.css
+  // .bncm-cover-glow). The url goes in as a custom property, and only from our own schemes.
   const src = state.cover?.cover;
   const ok = typeof src === 'string' && /^(bncm|blob|https):/i.test(src);
   if (ok) document.body.style.setProperty('--bncm-cover-url', `url(${JSON.stringify(src)})`);
   else document.body.style.removeProperty('--bncm-cover-url');
-  st.textContent = s.coverShadow === 'colorful' && ok ? `
-    .n-single .cdwrap::before { content: ""; position: absolute; inset: 0; background: var(--bncm-cover-url) center / cover;
-      filter: saturate(1.3) brightness(1.2) blur(25px); opacity: .6; border-radius: 16px;
-      transform: ${s.coverShape === 'round' ? 'none' : 'translateY(4%)'}; }
-    .n-single .cdimg { box-shadow: none !important; }` : '';
+  b.toggle('bncm-cover-glow', s.coverShadow === 'colorful' && ok);
   layoutSide();
 }
 

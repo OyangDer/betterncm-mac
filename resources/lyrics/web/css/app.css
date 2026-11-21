@@ -63,6 +63,20 @@ body.bncm-motion-paused #rnp-view .n-single .mn .title .name.scroll .name-marque
 /* A cover that could not be downloaded leaves the image out (side.js renderCover). */
 #rnp-view .n-single .cdimg img[hidden] { display: none !important; }
 
+/* RNPN's colourful cover shadow (St, B@332692): a blurred copy of the cover under it (side.js
+   applyCoverSettings). Painted into .sd's layer, it was cut into a hard-edged haze 28px around the
+   cover: after a track change (the loading veil's backdrop-filter coming and going) WebKit could
+   keep that layer sized by .cdin's box-shadow alone (1.4 x 20px) until some later style change. Its
+   own layer (will-change) keeps it out of .sd's, and the padding (3 x 25px) holds the whole blur
+   inside its box. */
+#rnp-view .n-single .bncm-cover-glow { display: none; position: absolute; inset: -75px; padding: 75px; pointer-events: none;
+  filter: saturate(1.3) brightness(1.2) blur(25px); opacity: .6; will-change: transform; }
+body.bncm-cover-glow #rnp-view .n-single .bncm-cover-glow { display: block; }
+#rnp-view .n-single .bncm-cover-glow > i { display: block; width: 100%; height: 100%; border-radius: 16px;
+  background: var(--bncm-cover-url) center / cover; transform: translateY(4%); }
+body:not(.rectangle-cover) #rnp-view .n-single .bncm-cover-glow > i { transform: none; }
+body.bncm-cover-glow #rnp-view .n-single .cdimg { box-shadow: none !important; }
+
 /* 文字阴影 / 辉光 (RNPN: filter: var(--rnp-drop-shadow) on the lyric lines, the title and the info):
    the same shadow drawn with the glyphs instead of a filter on each line, which gives every line
    its own surface re-rasterised as it moves (compat-rnp-perf.js does this for 辉光 inside NCM).
